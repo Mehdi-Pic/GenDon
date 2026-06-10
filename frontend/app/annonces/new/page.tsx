@@ -5,12 +5,7 @@ import { Upload, X, CheckCircle } from "lucide-react"
 import { useUser, useAuth } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 import imageCompression from "browser-image-compression"
-
-const categories = [
-  "Immobilier", "Vêtements", "Maison & Jardin",
-  "Électronique", "Loisirs", "Sport", "Autres"
-]
-const quartiers = ["Les Grésillons", "Les Chevrins", "Les Agnettes", "Le Village", "Le Luth", "Le Fossé de l'Aumône", "Chandon - Brénu - Sévines"]
+import { CATEGORIES as categories, QUARTIERS as quartiers } from "../../lib/annonces"
 
 type Errors = {
   titre?: string

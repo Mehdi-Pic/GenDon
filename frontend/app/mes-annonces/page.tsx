@@ -4,17 +4,7 @@ import { useUser, useAuth } from "@clerk/nextjs"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { MapPin, Pencil, Trash2 } from "lucide-react"
-
-type Annonce = {
-  id: number
-  titre: string
-  description: string
-  categorie: string
-  quartier: string
-  pseudo: string
-  images: string[]
-  created_at: string
-}
+import type { Annonce } from "../lib/annonces"
 
 export default function MesAnnonces() {
   const { isLoaded } = useUser()

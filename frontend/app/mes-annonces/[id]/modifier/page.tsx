@@ -4,12 +4,7 @@ import { useState, useEffect, use } from "react"
 import { useUser, useAuth } from "@clerk/nextjs"
 import { CheckCircle, Upload, X } from "lucide-react"
 import imageCompression from "browser-image-compression"
-
-const categories = [
-  "Immobilier", "Vêtements", "Maison & Jardin",
-  "Électronique", "Loisirs", "Sport", "Autres"
-]
-const quartiers = ["Les Grésillons", "Les Chevrins", "Les Agnettes", "Le Village", "Le Luth", "Le Fossé de l'Aumône", "Chandon - Brénu - Sévines"]
+import { CATEGORIES as categories, QUARTIERS as quartiers } from "../../../lib/annonces"
 
 type ImageState = {
   file: File

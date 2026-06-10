@@ -4,17 +4,7 @@ import Link from "next/link"
 import AnnonceCard from "../components/AnnonceCard"
 import FiltrePanel from "./FiltrePanel"
 import { auth } from "@clerk/nextjs/server"
-
-type Annonce = {
-  id: number
-  titre: string
-  description: string
-  categorie: string
-  quartier: string
-  pseudo: string
-  images: string[]
-  created_at: string
-}
+import type { Annonce } from "../lib/annonces"
 
 type SearchParams = {
   categorie?: string

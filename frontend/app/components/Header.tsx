@@ -5,11 +5,7 @@ import { Search, Plus } from "lucide-react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { SignInButton, Show, UserButton } from "@clerk/nextjs"
-
-const categories = [
-  "Immobilier", "Vêtements", "Maison & Jardin",
-  "Électronique", "Loisirs", "Sport", "Autres"
-]
+import { CATEGORIES as categories } from "../lib/annonces"
 
 function SearchBar() {
   const searchParams = useSearchParams()

@@ -4,21 +4,14 @@ import { useState, useEffect } from "react"
 import { Upload, X, CheckCircle } from "lucide-react"
 import { useUser, useAuth } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
-import imageCompression from "browser-image-compression"
 import { CATEGORIES as categories, QUARTIERS as quartiers } from "../../lib/annonces"
+import { useImageUpload } from "../../lib/useImageUpload"
 
 type Errors = {
   titre?: string
   description?: string
   categorie?: string
   quartier?: string
-}
-
-type ImageState = {
-  file: File
-  preview: string
-  progress: number
-  url: string | null
 }
 
 export default function NewAnnonce() {
@@ -29,7 +22,7 @@ export default function NewAnnonce() {
   const [description, setDescription] = useState("")
   const [categorie, setCategorie] = useState("")
   const [quartier, setQuartier] = useState("")
-  const [imageStates, setImageStates] = useState<ImageState[]>([])
+  const { images: imageStates, setImages: setImageStates, ajouterImages, uploadEnCours, slotsRestants } = useImageUpload()
   const [errors, setErrors] = useState<Errors>({})
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -40,55 +33,8 @@ export default function NewAnnonce() {
 
   if (!isLoaded || !isSignedIn) return null
 
-  const uploadEnCours = imageStates.some((img) => img.url === null)
-
   function supprimerImage(index: number) {
     setImageStates((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  async function ajouterImages(fichiers: File[]) {
-    const nouveaux: ImageState[] = fichiers.map((file) => ({
-      file,
-      preview: URL.createObjectURL(file),
-      progress: 0,
-      url: null,
-    }))
-
-    setImageStates((prev) => [...prev, ...nouveaux])
-
-    for (let i = 0; i < fichiers.length; i++) {
-      const indexGlobal = imageStates.length + i
-
-      const compressed = await imageCompression(fichiers[i], {
-        maxSizeMB: 2,
-        maxWidthOrHeight: 1920,
-        useWebWorker: true,
-        onProgress: (progress) => {
-          setImageStates((prev) => {
-            const next = [...prev]
-            if (next[indexGlobal]) next[indexGlobal] = { ...next[indexGlobal], progress }
-            return next
-          })
-        },
-      })
-
-      const formData = new FormData()
-      formData.append("files", compressed)
-
-      const token = await getToken()
-      const uploadRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      })
-      const uploadData = await uploadRes.json()
-
-      setImageStates((prev) => {
-        const next = [...prev]
-        if (next[indexGlobal]) next[indexGlobal] = { ...next[indexGlobal], url: uploadData.urls[0], progress: 100 }
-        return next
-      })
-    }
   }
 
   function validate(): Errors {
@@ -196,11 +142,13 @@ export default function NewAnnonce() {
                   )}
                 </div>
               ))}
-              <label className="h-20 w-20 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-green-400 hover:bg-green-50 transition-colors">
-                <Upload className="w-5 h-5 text-gray-400" />
-                <span className="text-xs text-gray-400 mt-1">Ajouter</span>
-                <input type="file" accept="image/*" multiple onChange={(e) => { const fichiers = Array.from(e.target.files ?? []); ajouterImages(fichiers) }} className="hidden" />
-              </label>
+              {slotsRestants > 0 && (
+                <label className="h-20 w-20 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-green-400 hover:bg-green-50 transition-colors">
+                  <Upload className="w-5 h-5 text-gray-400" />
+                  <span className="text-xs text-gray-400 mt-1">Ajouter</span>
+                  <input type="file" accept="image/*" multiple onChange={(e) => { const fichiers = Array.from(e.target.files ?? []); ajouterImages(fichiers) }} className="hidden" />
+                </label>
+              )}
             </div>
             <p className="text-xs text-gray-400 mt-2">JPG, PNG acceptés. Max 5 photos.</p>
           </div>

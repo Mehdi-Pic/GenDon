@@ -2,17 +2,7 @@ import { notFound } from "next/navigation"
 import { MapPin, User, ArrowLeft } from "lucide-react"
 import ImageCarousel from "../../components/ImageCarousel"
 import ContactButton from "./ContactButton"
-
-type Annonce = {
-  id: number
-  titre: string
-  description: string
-  categorie: string
-  quartier: string
-  pseudo: string
-  images: string[]
-  created_at: string
-}
+import type { Annonce } from "../../lib/annonces"
 
 async function getAnnonce(id: string): Promise<Annonce | null> {
   const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}`, { cache: "no-store" })

@@ -3,11 +3,7 @@
 import { useState } from "react"
 import { SlidersHorizontal } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
-
-const quartiers = [
-  "Les Grésillons", "Les Chevrins", "Les Agnettes", "Le Village",
-  "Le Luth", "Le Fossé de l'Aumône", "Chandon - Brénu - Sévines",
-]
+import { QUARTIERS as quartiers } from "../lib/annonces"
 
 type Filtres = {
   tri: "recent" | "ancien"

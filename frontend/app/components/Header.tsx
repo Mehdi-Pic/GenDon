@@ -46,6 +46,13 @@ function CategoryNav() {
 
   return (
     <ul className="flex items-center justify-center gap-0 overflow-x-hidden">
+      <li className="relative group flex items-center shrink-0">
+        <Link href="/annonces" className={`block px-5 py-4 text-lg transition-colors whitespace-nowrap font-medium ${!activeCat ? "text-gray-900" : "text-gray-500 hover:text-gray-900"}`}>
+          Tout
+        </Link>
+        <span className="text-gray-200 text-xs" aria-hidden="true">·</span>
+        <span className={`absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 bg-gray-900 transition-all duration-300 ease-out ${!activeCat ? "w-full" : "w-0 group-hover:w-full"}`} />
+      </li>
       {categories.map((cat, index) => {
         const isActive = activeCat === cat
         return (

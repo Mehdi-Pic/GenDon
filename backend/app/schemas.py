@@ -1,15 +1,48 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from typing import Optional, List
 
+CATEGORIES = [
+    "Immobilier", "Vêtements", "Maison & Jardin",
+    "Électronique", "Loisirs", "Sport", "Autres",
+]
+
+QUARTIERS = [
+    "Les Grésillons", "Les Chevrins", "Les Agnettes", "Le Village",
+    "Le Luth", "Le Fossé de l'Aumône", "Chandon - Brénu - Sévines",
+]
+
+
 class AnnonceCreate(BaseModel):
-    titre: str
-    description: str
+    titre: str = Field(min_length=1, max_length=100)
+    description: str = Field(min_length=1, max_length=500)
     categorie: str
     quartier: str
-    pseudo: str
+    pseudo: str = Field(min_length=1, max_length=50)
     images: Optional[List[str]] = []
     statut: Optional[str] = "publiee"
+
+    @field_validator("titre", "description", "pseudo")
+    @classmethod
+    def non_vide(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Ce champ ne peut pas être vide")
+        return v
+
+    @field_validator("categorie")
+    @classmethod
+    def categorie_valide(cls, v):
+        if v not in CATEGORIES:
+            raise ValueError("Catégorie invalide")
+        return v
+
+    @field_validator("quartier")
+    @classmethod
+    def quartier_valide(cls, v):
+        if v not in QUARTIERS:
+            raise ValueError("Quartier invalide")
+        return v
 
     @field_validator("images")
     @classmethod

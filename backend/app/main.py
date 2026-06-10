@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text, inspect as sa_inspect
-from pydantic import BaseModel as PydanticBase
+from pydantic import BaseModel as PydanticBase, Field
 from . import models, schemas
 from .database import engine, get_db, SessionLocal
 from .auth import get_current_user_id
@@ -16,7 +16,12 @@ from datetime import datetime, timedelta, timezone
 from math import ceil
 from html import escape
 from contextlib import asynccontextmanager
+from collections import defaultdict, deque
+from functools import partial
 from apscheduler.schedulers.background import BackgroundScheduler
+import anyio.to_thread
+import asyncio
+import time
 import os
 
 load_dotenv()
@@ -63,6 +68,21 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+
+# Rate limiting en mémoire par utilisateur (1 seule instance Railway).
+_appels: dict = defaultdict(deque)
+
+
+def verifier_rate_limit(user_id: str, action: str, maximum: int, fenetre_secondes: int) -> None:
+    cle = f"{action}:{user_id}"
+    maintenant = time.monotonic()
+    appels = _appels[cle]
+    while appels and maintenant - appels[0] > fenetre_secondes:
+        appels.popleft()
+    if len(appels) >= maximum:
+        raise HTTPException(status_code=429, detail="Trop de requêtes, réessayez plus tard")
+    appels.append(maintenant)
 
 
 def extraire_public_id(url: str) -> str:
@@ -119,6 +139,7 @@ async def upload_images(
     files: List[UploadFile] = File(...),
     user_id: str = Depends(get_current_user_id),
 ):
+    verifier_rate_limit(user_id, "upload", maximum=20, fenetre_secondes=3600)
     if len(files) > 5:
         raise HTTPException(status_code=400, detail="Maximum 5 photos par annonce")
     urls = []
@@ -128,10 +149,14 @@ async def upload_images(
         contenu = await file.read()
         if len(contenu) > TAILLE_MAX_IMAGE:
             raise HTTPException(status_code=400, detail="Image trop volumineuse (max 10 Mo)")
-        resultat = cloudinary.uploader.upload(
-            contenu,
-            folder="gendon",
-            transformation=[{"quality": "auto", "fetch_format": "auto"}],
+        # Appel Cloudinary synchrone → thread pour ne pas bloquer l'event loop
+        resultat = await anyio.to_thread.run_sync(
+            partial(
+                cloudinary.uploader.upload,
+                contenu,
+                folder="gendon",
+                transformation=[{"quality": "auto", "fetch_format": "auto"}],
+            )
         )
         urls.append(resultat["secure_url"])
     return {"urls": urls}
@@ -164,6 +189,7 @@ def lister_annonces(
     exclude_user_id: str = None,
     db: Session = Depends(get_db),
 ):
+    page = max(1, page)
     query = db.query(models.Annonce)
     if categorie:
         query = query.filter(models.Annonce.categorie == categorie)
@@ -236,7 +262,7 @@ def modifier_annonce(
 
 
 class MessageContact(PydanticBase):
-    message: str
+    message: str = Field(min_length=1, max_length=2000)
 
 
 @app.post("/annonces/{annonce_id}/contact")
@@ -254,12 +280,16 @@ async def contacter_donneur(
     if annonce.clerk_user_id == user_id:
         raise HTTPException(status_code=400, detail="Vous ne pouvez pas contacter votre propre annonce")
 
+    verifier_rate_limit(user_id, "contact", maximum=5, fenetre_secondes=3600)
+
     clerk_secret = os.getenv("CLERK_SECRET_KEY")
     headers_clerk = {"Authorization": f"Bearer {clerk_secret}"}
 
     async with httpx.AsyncClient(timeout=10) as client:
-        donor_res = await client.get(f"https://api.clerk.com/v1/users/{annonce.clerk_user_id}", headers=headers_clerk)
-        requester_res = await client.get(f"https://api.clerk.com/v1/users/{user_id}", headers=headers_clerk)
+        donor_res, requester_res = await asyncio.gather(
+            client.get(f"https://api.clerk.com/v1/users/{annonce.clerk_user_id}", headers=headers_clerk),
+            client.get(f"https://api.clerk.com/v1/users/{user_id}", headers=headers_clerk),
+        )
 
     if not donor_res.is_success or not requester_res.is_success:
         raise HTTPException(status_code=400, detail="Impossible de contacter ce donneur")
@@ -281,29 +311,32 @@ async def contacter_donneur(
 
     resend.api_key = os.getenv("RESEND_API_KEY")
 
+    email_payload = {
+        "from": f"GenDon <{os.getenv('RESEND_FROM_EMAIL', 'onboarding@resend.dev')}>",
+        "to": [donor_email],
+        **({"reply_to": requester_email} if requester_email else {}),
+        "subject": f"{requester_name} est intéressé(e) par votre don : {annonce.titre}",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:560px;margin:auto;color:#111">
+          <p style="font-size:18px;font-weight:700;margin-bottom:4px">Quelqu'un veut votre don !</p>
+          <p style="color:#6b7280;margin-top:0">via <strong>GenDon</strong> — Gennevilliers</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+          <p><strong>{escape(requester_name)}</strong> est intéressé(e) par votre annonce :</p>
+          <p style="background:#f9fafb;border-left:3px solid #16a34a;padding:12px 16px;border-radius:4px;font-weight:600">{escape(annonce.titre)}</p>
+          <p>Son message :</p>
+          <blockquote style="background:#f9fafb;border-left:3px solid #d1d5db;padding:12px 16px;margin:0;border-radius:4px;color:#374151">
+            {escape(data.message)}
+          </blockquote>
+          <p style="margin-top:24px">Pour lui répondre, <strong>répondez simplement à cet email</strong>.</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+          <p style="color:#9ca3af;font-size:12px">GenDon · Dons gratuits entre habitants de Gennevilliers</p>
+        </div>
+        """,
+    }
+
     try:
-        resend.Emails.send({
-            "from": f"GenDon <{os.getenv('RESEND_FROM_EMAIL', 'onboarding@resend.dev')}>",
-            "to": [donor_email],
-            **({"reply_to": requester_email} if requester_email else {}),
-            "subject": f"{requester_name} est intéressé(e) par votre don : {annonce.titre}",
-            "html": f"""
-            <div style="font-family:sans-serif;max-width:560px;margin:auto;color:#111">
-              <p style="font-size:18px;font-weight:700;margin-bottom:4px">Quelqu'un veut votre don !</p>
-              <p style="color:#6b7280;margin-top:0">via <strong>GenDon</strong> — Gennevilliers</p>
-              <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
-              <p><strong>{requester_name}</strong> est intéressé(e) par votre annonce :</p>
-              <p style="background:#f9fafb;border-left:3px solid #16a34a;padding:12px 16px;border-radius:4px;font-weight:600">{annonce.titre}</p>
-              <p>Son message :</p>
-              <blockquote style="background:#f9fafb;border-left:3px solid #d1d5db;padding:12px 16px;margin:0;border-radius:4px;color:#374151">
-                {escape(data.message)}
-              </blockquote>
-              <p style="margin-top:24px">Pour lui répondre, <strong>répondez simplement à cet email</strong>.</p>
-              <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
-              <p style="color:#9ca3af;font-size:12px">GenDon · Dons gratuits entre habitants de Gennevilliers</p>
-            </div>
-            """,
-        })
+        # Resend (basé sur requests, synchrone) → thread pour ne pas bloquer l'event loop
+        await anyio.to_thread.run_sync(partial(resend.Emails.send, email_payload))
     except Exception:
         raise HTTPException(status_code=500, detail="Erreur lors de l'envoi du message")
 

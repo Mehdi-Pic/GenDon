@@ -7,7 +7,7 @@ import Link from "next/link"
 import { SignInButton, Show, UserButton } from "@clerk/nextjs"
 
 const categories = [
-  "Immobilier", "Véhicules", "Vêtements", "Maison & Jardin",
+  "Immobilier", "Vêtements", "Maison & Jardin",
   "Électronique", "Loisirs", "Sport", "Autres"
 ]
 

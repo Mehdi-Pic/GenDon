@@ -1,0 +1,112 @@
+"use client"
+
+import { useUser, useAuth } from "@clerk/nextjs"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { MapPin, Pencil, Trash2 } from "lucide-react"
+
+type Annonce = {
+  id: number
+  titre: string
+  description: string
+  categorie: string
+  quartier: string
+  pseudo: string
+  images: string[]
+  created_at: string
+}
+
+export default function MesAnnonces() {
+  const { user, isLoaded } = useUser()
+  const { getToken, isSignedIn } = useAuth()
+  const router = useRouter()
+  const [annonces, setAnnonces] = useState<Annonce[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const pseudo = user?.username || user?.firstName || null
+
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) router.replace("/")
+  }, [isLoaded, isSignedIn, router])
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+    if (!pseudo) { setLoading(false); return }
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/user/${pseudo}`)
+      .then((res) => res.json())
+      .then((data) => { setAnnonces(data); setLoading(false) })
+  }, [isLoaded, isSignedIn, pseudo])
+
+  async function supprimerAnnonce(id: number) {
+    if (!confirm("Supprimer cette annonce ?")) return
+    const token = await getToken()
+    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    setAnnonces((prev) => prev.filter((a) => a.id !== id))
+  }
+
+  if (!isLoaded || !isSignedIn || loading) {
+    return (
+      <main>
+        <div className="max-w-4xl mx-auto px-6 py-12">
+          <p className="text-gray-400">Chargement...</p>
+        </div>
+      </main>
+    )
+  }
+
+  return (
+    <main>
+      <div className="max-w-4xl mx-auto px-6 py-12">
+        <h1 className="text-2xl font-black text-gray-900 mb-2">Mes annonces</h1>
+        <p className="text-gray-500 text-sm mb-8">{annonces.length} annonce{annonces.length > 1 ? "s" : ""} déposée{annonces.length > 1 ? "s" : ""}</p>
+        {annonces.length === 0 ? (
+          <div className="text-center py-24">
+            <p className="text-gray-400 mb-4">Vous n'avez pas encore déposé d'annonce.</p>
+            <a href="/annonces/new" className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
+              Déposer un don
+            </a>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {annonces.map((annonce) => (
+              <div key={annonce.id} className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl p-4 hover:border-gray-300 transition-colors">
+                {annonce.images && annonce.images.length > 0 ? (
+                  <img src={annonce.images[0]} alt={annonce.titre} className="w-20 h-20 object-cover rounded-xl shrink-0" />
+                ) : (
+                  <div className="w-20 h-20 bg-gray-100 rounded-xl shrink-0 flex items-center justify-center">
+                    <span className="text-gray-400 text-xs">Pas de photo</span>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-gray-900 font-bold truncate">{annonce.titre}</h2>
+                  <p className="text-gray-500 text-sm line-clamp-1 mt-0.5">{annonce.description}</p>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{annonce.categorie}</span>
+                    <div className="flex items-center gap-1 text-xs text-gray-400">
+                      <MapPin className="w-3 h-3" />
+                      {annonce.quartier}
+                    </div>
+                    <span className="text-xs text-gray-400">{new Date(annonce.created_at).toLocaleDateString("fr-FR")}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <a href={`/mes-annonces/${annonce.id}/modifier`} className="flex items-center gap-1.5 border border-gray-200 hover:border-gray-400 text-gray-600 px-3 py-2 rounded-xl text-sm font-medium transition-colors">
+                    <Pencil className="w-4 h-4" />
+                    Modifier
+                  </a>
+                  <button onClick={() => supprimerAnnonce(annonce.id)} className="flex items-center gap-1.5 border border-red-100 hover:border-red-300 text-red-500 px-3 py-2 rounded-xl text-sm font-medium transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                    Supprimer
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </main>
+  )
+}

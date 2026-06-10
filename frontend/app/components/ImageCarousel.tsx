@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { ChevronLeft, ChevronRight, X } from "lucide-react"
+import { vignette } from "../lib/annonces"
 
 export default function ImageCarousel({ images }: { images: string[] }) {
   const [index, setIndex] = useState(0)
@@ -51,7 +52,7 @@ export default function ImageCarousel({ images }: { images: string[] }) {
           <div className="flex items-center justify-center gap-2">
             {images.map((img, i) => (
               <button key={i} onClick={() => setIndex(i)} className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${i === index ? "border-green-500 opacity-100" : "border-transparent opacity-60 hover:opacity-100"}`}>
-                <img src={img} alt={`Miniature ${i + 1}`} className="w-full h-full object-cover" />
+                <img src={vignette(img, 200)} alt={`Miniature ${i + 1}`} className="w-full h-full object-cover" />
               </button>
             ))}
           </div>

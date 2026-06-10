@@ -1,12 +1,13 @@
 import { MapPin } from "lucide-react"
-import type { Annonce } from "../lib/annonces"
+import Link from "next/link"
+import { vignette, type Annonce } from "../lib/annonces"
 
 export default function AnnonceCard({ annonce }: { annonce: Annonce }) {
   return (
-    <a href={`/annonces/${annonce.id}`} aria-label={`Voir l'annonce : ${annonce.titre}`} className="group block bg-white rounded-2xl overflow-hidden border border-gray-100 hover:border-gray-300 hover:shadow-lg transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-300">
+    <Link href={`/annonces/${annonce.id}`} aria-label={`Voir l'annonce : ${annonce.titre}`} className="group block bg-white rounded-2xl overflow-hidden border border-gray-100 hover:border-gray-300 hover:shadow-lg transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-300">
       <div className="relative overflow-hidden">
         {annonce.images && annonce.images.length > 0 ? (
-          <img src={annonce.images[0]} alt={`Photo de ${annonce.titre}`} loading="lazy" className="w-full h-52 object-cover group-hover:scale-105 transition-transform duration-300" />
+          <img src={vignette(annonce.images[0])} alt={`Photo de ${annonce.titre}`} loading="lazy" className="w-full h-52 object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
           <div className="w-full h-52 bg-gray-100 flex items-center justify-center">
             <span className="text-gray-400 text-sm">Pas de photo</span>
@@ -27,6 +28,6 @@ export default function AnnonceCard({ annonce }: { annonce: Annonce }) {
           <span className="text-xs text-gray-400">{new Date(annonce.created_at).toLocaleDateString("fr-FR")}</span>
         </div>
       </div>
-    </a>
+    </Link>
   )
 }

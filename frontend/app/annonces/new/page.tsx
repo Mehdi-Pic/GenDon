@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Upload, X, CheckCircle } from "lucide-react"
 import { useUser, useAuth } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { CATEGORIES as categories, QUARTIERS as quartiers } from "../../lib/annonces"
 import { useImageUpload } from "../../lib/useImageUpload"
 
@@ -22,10 +23,11 @@ export default function NewAnnonce() {
   const [description, setDescription] = useState("")
   const [categorie, setCategorie] = useState("")
   const [quartier, setQuartier] = useState("")
-  const { images: imageStates, setImages: setImageStates, ajouterImages, uploadEnCours, slotsRestants } = useImageUpload()
+  const { images: imageStates, setImages: setImageStates, ajouterImages, uploadEnCours, slotsRestants, erreur: erreurUpload } = useImageUpload()
   const [errors, setErrors] = useState<Errors>({})
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [erreurSubmit, setErreurSubmit] = useState("")
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) router.replace("/")
@@ -54,6 +56,7 @@ export default function NewAnnonce() {
       return
     }
     setLoading(true)
+    setErreurSubmit("")
     try {
       const token = await getToken()
       const imageUrls = imageStates.map((img) => img.url).filter(Boolean) as string[]
@@ -70,10 +73,10 @@ export default function NewAnnonce() {
           statut: "publiee",
         }),
       })
-      if (!response.ok) throw new Error("Erreur lors de la création")
+      if (!response.ok) throw new Error("La publication a échoué, réessayez")
       setSubmitted(true)
     } catch (error) {
-      console.error(error)
+      setErreurSubmit(error instanceof Error ? error.message : "Une erreur est survenue")
     } finally {
       setLoading(false)
     }
@@ -89,9 +92,9 @@ export default function NewAnnonce() {
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Don publié !</h1>
           <p className="text-gray-500 mb-8">Votre annonce est en ligne. Les habitants de Gennevilliers peuvent maintenant la voir.</p>
           <div className="flex items-center justify-center gap-4">
-            <a href="/annonces" className="bg-gray-900 hover:bg-gray-700 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
+            <Link href="/annonces" className="bg-gray-900 hover:bg-gray-700 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
               Voir les annonces
-            </a>
+            </Link>
             <button onClick={() => { setSubmitted(false); setTitre(""); setDescription(""); setCategorie(""); setQuartier(""); setImageStates([]) }} className="border border-gray-200 hover:border-gray-400 text-gray-700 px-6 py-3 rounded-xl font-semibold transition-colors">
               Déposer un autre don
             </button>
@@ -104,20 +107,20 @@ export default function NewAnnonce() {
   return (
     <main>
       <div className="max-w-2xl mx-auto px-6 py-12">
-        <a href="/annonces" className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-900 text-sm mb-8 transition-colors font-medium">
+        <Link href="/annonces" className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-900 text-sm mb-8 transition-colors font-medium">
           ← Retour aux annonces
-        </a>
+        </Link>
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Déposer un don</h1>
         <p className="text-gray-500 text-sm mb-8">Les champs marqués <span className="text-red-500">*</span> sont obligatoires.</p>
         <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Titre <span className="text-red-500">*</span></label>
-            <input type="text" value={titre} onChange={(e) => { setTitre(e.target.value); setErrors((prev) => ({ ...prev, titre: undefined })) }} onBlur={() => { if (!titre.trim()) setErrors((prev) => ({ ...prev, titre: "Le titre est obligatoire" })) }} placeholder="Ex: Canapé 3 places" aria-invalid={!!errors.titre} className={`w-full bg-white border rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none transition-colors ${errors.titre ? "border-red-400 focus:border-red-400" : "border-gray-200 focus:border-green-500"}`} />
+            <input type="text" value={titre} maxLength={100} onChange={(e) => { setTitre(e.target.value); setErrors((prev) => ({ ...prev, titre: undefined })) }} onBlur={() => { if (!titre.trim()) setErrors((prev) => ({ ...prev, titre: "Le titre est obligatoire" })) }} placeholder="Ex: Canapé 3 places" aria-invalid={!!errors.titre} className={`w-full bg-white border rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none transition-colors ${errors.titre ? "border-red-400 focus:border-red-400" : "border-gray-200 focus:border-green-500"}`} />
             {errors.titre && <p className="text-red-500 text-xs mt-1">{errors.titre}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Description <span className="text-red-500">*</span></label>
-            <textarea value={description} onChange={(e) => { setDescription(e.target.value); setErrors((prev) => ({ ...prev, description: undefined })) }} onBlur={() => { if (!description.trim()) setErrors((prev) => ({ ...prev, description: "La description est obligatoire" })) }} placeholder="Décrivez l'objet, son état, ses dimensions..." rows={4} aria-invalid={!!errors.description} className={`w-full bg-white border rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none transition-colors resize-none ${errors.description ? "border-red-400 focus:border-red-400" : "border-gray-200 focus:border-green-500"}`} />
+            <textarea value={description} maxLength={500} onChange={(e) => { setDescription(e.target.value); setErrors((prev) => ({ ...prev, description: undefined })) }} onBlur={() => { if (!description.trim()) setErrors((prev) => ({ ...prev, description: "La description est obligatoire" })) }} placeholder="Décrivez l'objet, son état, ses dimensions..." rows={4} aria-invalid={!!errors.description} className={`w-full bg-white border rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none transition-colors resize-none ${errors.description ? "border-red-400 focus:border-red-400" : "border-gray-200 focus:border-green-500"}`} />
             <p className="text-xs text-gray-400 mt-1">{description.length}/500 caractères</p>
             {errors.description && <p className="text-red-500 text-xs mt-1">{errors.description}</p>}
           </div>
@@ -151,6 +154,7 @@ export default function NewAnnonce() {
               )}
             </div>
             <p className="text-xs text-gray-400 mt-2">JPG, PNG acceptés. Max 5 photos.</p>
+            {erreurUpload && <p className="text-red-500 text-xs mt-1">{erreurUpload}</p>}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -170,6 +174,7 @@ export default function NewAnnonce() {
               {errors.quartier && <p className="text-red-500 text-xs mt-1">{errors.quartier}</p>}
             </div>
           </div>
+          {erreurSubmit && <p className="text-red-500 text-sm">{erreurSubmit}</p>}
           <button type="submit" disabled={loading || uploadEnCours} className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-2xl transition-colors text-base">
             {loading ? (
               <>

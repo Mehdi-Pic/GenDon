@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from typing import List
 from datetime import datetime, timedelta, timezone
 from math import ceil
+from html import escape
 from apscheduler.schedulers.background import BackgroundScheduler
 import os
 
@@ -46,8 +47,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
@@ -71,7 +72,7 @@ def supprimer_images_cloudinary(urls: list) -> None:
 
 
 def verifier_proprietaire(annonce: models.Annonce, user_id: str) -> None:
-    if annonce.clerk_user_id and annonce.clerk_user_id != user_id:
+    if not annonce.clerk_user_id or annonce.clerk_user_id != user_id:
         raise HTTPException(status_code=403, detail="Vous n'êtes pas le propriétaire de cette annonce")
 
 
@@ -85,13 +86,20 @@ def purger_annonces_expirees():
             db.delete(annonce)
         if expirees:
             db.commit()
+    except Exception:
+        db.rollback()
     finally:
         db.close()
 
 
-scheduler = BackgroundScheduler()
+scheduler = BackgroundScheduler(daemon=True)
 scheduler.add_job(purger_annonces_expirees, "interval", hours=24)
 scheduler.start()
+
+
+@app.on_event("shutdown")
+def shutdown_scheduler():
+    scheduler.shutdown(wait=False)
 
 
 @app.get("/")
@@ -248,6 +256,9 @@ async def contacter_donneur(
         donor_res = await client.get(f"https://api.clerk.com/v1/users/{annonce.clerk_user_id}", headers=headers_clerk)
         requester_res = await client.get(f"https://api.clerk.com/v1/users/{user_id}", headers=headers_clerk)
 
+    if not donor_res.is_success or not requester_res.is_success:
+        raise HTTPException(status_code=400, detail="Impossible de contacter ce donneur")
+
     donor = donor_res.json()
     requester = requester_res.json()
 
@@ -280,7 +291,7 @@ async def contacter_donneur(
               <p style="background:#f9fafb;border-left:3px solid #16a34a;padding:12px 16px;border-radius:4px;font-weight:600">{annonce.titre}</p>
               <p>Son message :</p>
               <blockquote style="background:#f9fafb;border-left:3px solid #d1d5db;padding:12px 16px;margin:0;border-radius:4px;color:#374151">
-                {data.message}
+                {escape(data.message)}
               </blockquote>
               <p style="margin-top:24px">Pour lui répondre, <strong>répondez simplement à cet email</strong>.</p>
               <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
@@ -288,8 +299,8 @@ async def contacter_donneur(
             </div>
             """,
         })
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur d'envoi email : {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Erreur lors de l'envoi du message")
 
     return {"message": "Message envoyé"}
 

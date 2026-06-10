@@ -1,4 +1,5 @@
 import { ArrowRight, MapPin, Heart, Zap } from "lucide-react"
+import Link from "next/link"
 
 export default function Home() {
   return (
@@ -22,13 +23,13 @@ export default function Home() {
             La plateforme de dons entre habitants de Gennevilliers. Zéro argent, zéro transaction — juste du lien local.
           </p>
           <div className="flex items-center justify-center gap-4">
-            <a href="/annonces" className="flex items-center gap-2 bg-white text-gray-900 hover:bg-gray-100 px-6 py-3 rounded-xl font-semibold transition-colors">
+            <Link href="/annonces" className="flex items-center gap-2 bg-white text-gray-900 hover:bg-gray-100 px-6 py-3 rounded-xl font-semibold transition-colors">
               Voir les dons
               <ArrowRight className="w-4 h-4" />
-            </a>
-            <a href="/annonces/new" className="flex items-center gap-2 border border-white/50 hover:border-white hover:bg-white/10 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
+            </Link>
+            <Link href="/annonces/new" className="flex items-center gap-2 border border-white/50 hover:border-white hover:bg-white/10 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
               Déposer un don
-            </a>
+            </Link>
           </div>
         </div>
       </section>

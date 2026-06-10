@@ -4,7 +4,8 @@ import { useUser, useAuth } from "@clerk/nextjs"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { MapPin, Pencil, Trash2 } from "lucide-react"
-import type { Annonce } from "../lib/annonces"
+import Link from "next/link"
+import { vignette, type Annonce } from "../lib/annonces"
 
 export default function MesAnnonces() {
   const { isLoaded } = useUser()
@@ -69,16 +70,16 @@ export default function MesAnnonces() {
         {annonces.length === 0 ? (
           <div className="text-center py-24">
             <p className="text-gray-400 mb-4">Vous n'avez pas encore déposé d'annonce.</p>
-            <a href="/annonces/new" className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
+            <Link href="/annonces/new" className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
               Déposer un don
-            </a>
+            </Link>
           </div>
         ) : (
           <div className="flex flex-col gap-4">
             {annonces.map((annonce) => (
               <div key={annonce.id} className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl p-4 hover:border-gray-300 transition-colors">
                 {annonce.images && annonce.images.length > 0 ? (
-                  <img src={annonce.images[0]} alt={annonce.titre} className="w-20 h-20 object-cover rounded-xl shrink-0" />
+                  <img src={vignette(annonce.images[0], 200)} alt={annonce.titre} className="w-20 h-20 object-cover rounded-xl shrink-0" />
                 ) : (
                   <div className="w-20 h-20 bg-gray-100 rounded-xl shrink-0 flex items-center justify-center">
                     <span className="text-gray-400 text-xs">Pas de photo</span>
@@ -97,10 +98,10 @@ export default function MesAnnonces() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <a href={`/mes-annonces/${annonce.id}/modifier`} className="flex items-center gap-1.5 border border-gray-200 hover:border-gray-400 text-gray-600 px-3 py-2 rounded-xl text-sm font-medium transition-colors">
+                  <Link href={`/mes-annonces/${annonce.id}/modifier`} className="flex items-center gap-1.5 border border-gray-200 hover:border-gray-400 text-gray-600 px-3 py-2 rounded-xl text-sm font-medium transition-colors">
                     <Pencil className="w-4 h-4" />
                     Modifier
-                  </a>
+                  </Link>
                   <button onClick={() => supprimerAnnonce(annonce.id)} className="flex items-center gap-1.5 border border-red-100 hover:border-red-300 text-red-500 px-3 py-2 rounded-xl text-sm font-medium transition-colors">
                     <Trash2 className="w-4 h-4" />
                     Supprimer

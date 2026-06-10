@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation"
+import Link from "next/link"
 import { MapPin, User, ArrowLeft } from "lucide-react"
 import ImageCarousel from "../../components/ImageCarousel"
 import ContactButton from "./ContactButton"
@@ -19,10 +20,10 @@ export default async function AnnonceDetail({ params }: { params: Promise<{ id: 
   return (
     <main>
       <div className="max-w-3xl mx-auto px-6 py-10">
-        <a href="/annonces" className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-900 text-sm mb-8 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-green-300 rounded-lg">
+        <Link href="/annonces" className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-900 text-sm mb-8 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-green-300 rounded-lg">
           <ArrowLeft className="w-4 h-4" aria-hidden="true" />
           Retour aux annonces
-        </a>
+        </Link>
         <ImageCarousel images={annonce.images ?? []} />
         <div className="flex items-center gap-3 mb-4">
           <span className="bg-gray-100 text-gray-700 text-xs font-semibold px-3 py-1.5 rounded-full">{annonce.categorie}</span>

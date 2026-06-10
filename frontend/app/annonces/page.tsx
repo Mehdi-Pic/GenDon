@@ -81,9 +81,9 @@ export default async function Annonces({ searchParams }: { searchParams: Promise
           </div>
           <div className="flex items-center gap-3">
             {(categorie || recherche) && (
-              <a href="/annonces" className="text-sm text-gray-500 hover:text-gray-900 border border-gray-200 hover:border-gray-400 px-4 py-2 rounded-xl transition-colors">
+              <Link href="/annonces" className="text-sm text-gray-500 hover:text-gray-900 border border-gray-200 hover:border-gray-400 px-4 py-2 rounded-xl transition-colors">
                 Voir tout
-              </a>
+              </Link>
             )}
             <Suspense fallback={null}>
               <FiltrePanel />
@@ -94,9 +94,9 @@ export default async function Annonces({ searchParams }: { searchParams: Promise
         {annonces.length === 0 ? (
           <div className="text-center py-24">
             <p className="text-gray-400 text-lg">Aucun don disponible{recherche ? ` pour "${recherche}"` : categorie ? ` dans la catégorie "${categorie}"` : ""} pour le moment.</p>
-            <a href="/annonces/new" className="inline-block mt-4 bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
+            <Link href="/annonces/new" className="inline-block mt-4 bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
               Déposer le premier don
-            </a>
+            </Link>
           </div>
         ) : (
           <>

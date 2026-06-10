@@ -3,7 +3,8 @@
 import { useState, useEffect, use } from "react"
 import { useUser, useAuth } from "@clerk/nextjs"
 import { CheckCircle, Upload, X } from "lucide-react"
-import { CATEGORIES as categories, QUARTIERS as quartiers } from "../../../lib/annonces"
+import Link from "next/link"
+import { CATEGORIES as categories, QUARTIERS as quartiers, vignette } from "../../../lib/annonces"
 import { useImageUpload } from "../../../lib/useImageUpload"
 
 export default function ModifierAnnonce({ params }: { params: Promise<{ id: string }> }) {
@@ -18,8 +19,10 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [chargement, setChargement] = useState(true)
+  const [introuvable, setIntrouvable] = useState(false)
+  const [erreurSubmit, setErreurSubmit] = useState("")
 
-  const { images: nouvellesImages, setImages: setNouvellesImages, ajouterImages, uploadEnCours, slotsRestants } = useImageUpload(imagesExistantes.length)
+  const { images: nouvellesImages, setImages: setNouvellesImages, ajouterImages, uploadEnCours, slotsRestants, erreur: erreurUpload } = useImageUpload(imagesExistantes.length)
   const totalImages = imagesExistantes.length + nouvellesImages.length
 
   useEffect(() => {
@@ -29,7 +32,10 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
       return
     }
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}`)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error("introuvable")
+        return res.json()
+      })
       .then((data) => {
         setTitre(data.titre)
         setDescription(data.description)
@@ -38,15 +44,20 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
         setImagesExistantes(data.images || [])
         setChargement(false)
       })
+      .catch(() => {
+        setIntrouvable(true)
+        setChargement(false)
+      })
   }, [id, isLoaded, isSignedIn])
 
   async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault()
     setLoading(true)
+    setErreurSubmit("")
     try {
       const token = await getToken()
       const urlsNouvellesImages = nouvellesImages.map((img) => img.url).filter(Boolean) as string[]
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -59,9 +70,10 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
           statut: "publiee",
         }),
       })
+      if (!response.ok) throw new Error("Impossible d'enregistrer les modifications")
       setSubmitted(true)
     } catch (error) {
-      console.error(error)
+      setErreurSubmit(error instanceof Error ? error.message : "Une erreur est survenue")
     } finally {
       setLoading(false)
     }
@@ -79,6 +91,20 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
 
   if (!isSignedIn) return null
 
+  if (introuvable) {
+    return (
+      <main>
+        <div className="max-w-2xl mx-auto px-6 py-24 text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Annonce introuvable</h1>
+          <p className="text-gray-500 mb-8">Cette annonce n'existe plus ou a été supprimée.</p>
+          <Link href="/mes-annonces" className="bg-gray-900 hover:bg-gray-700 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
+            Retour à mes annonces
+          </Link>
+        </div>
+      </main>
+    )
+  }
+
   if (submitted) {
     return (
       <main>
@@ -88,9 +114,9 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Annonce modifiée !</h1>
           <p className="text-gray-500 mb-8">Vos modifications ont bien été enregistrées.</p>
-          <a href="/mes-annonces" className="bg-gray-900 hover:bg-gray-700 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
+          <Link href="/mes-annonces" className="bg-gray-900 hover:bg-gray-700 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
             Retour à mes annonces
-          </a>
+          </Link>
         </div>
       </main>
     )
@@ -99,19 +125,20 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
   return (
     <main>
       <div className="max-w-2xl mx-auto px-6 py-12">
-        <a href="/mes-annonces" className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-900 text-sm mb-8 transition-colors font-medium">
+        <Link href="/mes-annonces" className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-900 text-sm mb-8 transition-colors font-medium">
           ← Retour à mes annonces
-        </a>
+        </Link>
         <h1 className="text-2xl font-bold text-gray-900 mb-8">Modifier l'annonce</h1>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Titre</label>
-            <input type="text" value={titre} onChange={(e) => setTitre(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:outline-none focus:border-green-500" />
+            <input type="text" value={titre} maxLength={100} onChange={(e) => setTitre(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:outline-none focus:border-green-500" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:outline-none focus:border-green-500 resize-none" />
+            <textarea value={description} maxLength={500} onChange={(e) => setDescription(e.target.value)} rows={4} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:outline-none focus:border-green-500 resize-none" />
+            <p className="text-xs text-gray-400 mt-1">{description.length}/500 caractères</p>
           </div>
 
           <div>
@@ -119,7 +146,7 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
             <div className="flex flex-wrap items-center gap-3">
               {imagesExistantes.map((url, i) => (
                 <div key={`existante-${i}`} className="relative w-20 h-20">
-                  <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover rounded-xl" />
+                  <img src={vignette(url, 200)} alt={`Photo ${i + 1}`} className="w-full h-full object-cover rounded-xl" />
                   <button
                     type="button"
                     onClick={() => setImagesExistantes((prev) => prev.filter((_, j) => j !== i))}
@@ -171,6 +198,7 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
             <p className="text-xs text-gray-400 mt-2">
               {totalImages}/5 photos · {slotsRestants > 0 ? `${slotsRestants} emplacement${slotsRestants > 1 ? "s" : ""} restant${slotsRestants > 1 ? "s" : ""}` : "Limite atteinte"}
             </p>
+            {erreurUpload && <p className="text-red-500 text-xs mt-1">{erreurUpload}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -188,6 +216,7 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
+          {erreurSubmit && <p className="text-red-500 text-sm">{erreurSubmit}</p>}
           <button
             type="submit"
             disabled={loading || uploadEnCours}

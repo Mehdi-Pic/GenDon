@@ -3,15 +3,8 @@
 import { useState, useEffect, use } from "react"
 import { useUser, useAuth } from "@clerk/nextjs"
 import { CheckCircle, Upload, X } from "lucide-react"
-import imageCompression from "browser-image-compression"
 import { CATEGORIES as categories, QUARTIERS as quartiers } from "../../../lib/annonces"
-
-type ImageState = {
-  file: File
-  preview: string
-  progress: number
-  url: string | null
-}
+import { useImageUpload } from "../../../lib/useImageUpload"
 
 export default function ModifierAnnonce({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -22,14 +15,12 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
   const [categorie, setCategorie] = useState("")
   const [quartier, setQuartier] = useState("")
   const [imagesExistantes, setImagesExistantes] = useState<string[]>([])
-  const [nouvellesImages, setNouvellesImages] = useState<ImageState[]>([])
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [chargement, setChargement] = useState(true)
 
+  const { images: nouvellesImages, setImages: setNouvellesImages, ajouterImages, uploadEnCours, slotsRestants } = useImageUpload(imagesExistantes.length)
   const totalImages = imagesExistantes.length + nouvellesImages.length
-  const uploadEnCours = nouvellesImages.some((img) => img.url === null)
-  const slotsRestants = 5 - totalImages
 
   useEffect(() => {
     if (!isLoaded) return
@@ -48,54 +39,6 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
         setChargement(false)
       })
   }, [id, isLoaded, isSignedIn])
-
-  async function ajouterImages(fichiers: File[]) {
-    const disponibles = fichiers.slice(0, slotsRestants)
-    if (disponibles.length === 0) return
-
-    const nouveaux: ImageState[] = disponibles.map((file) => ({
-      file,
-      preview: URL.createObjectURL(file),
-      progress: 0,
-      url: null,
-    }))
-
-    setNouvellesImages((prev) => [...prev, ...nouveaux])
-
-    for (let i = 0; i < disponibles.length; i++) {
-      const indexGlobal = nouvellesImages.length + i
-
-      const compressed = await imageCompression(disponibles[i], {
-        maxSizeMB: 2,
-        maxWidthOrHeight: 1920,
-        useWebWorker: true,
-        onProgress: (progress) => {
-          setNouvellesImages((prev) => {
-            const next = [...prev]
-            if (next[indexGlobal]) next[indexGlobal] = { ...next[indexGlobal], progress }
-            return next
-          })
-        },
-      })
-
-      const formData = new FormData()
-      formData.append("files", compressed)
-
-      const token = await getToken()
-      const uploadRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      })
-      const uploadData = await uploadRes.json()
-
-      setNouvellesImages((prev) => {
-        const next = [...prev]
-        if (next[indexGlobal]) next[indexGlobal] = { ...next[indexGlobal], url: uploadData.urls[0], progress: 100 }
-        return next
-      })
-    }
-  }
 
   async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault()

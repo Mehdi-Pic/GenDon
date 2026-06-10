@@ -17,13 +17,11 @@ type Annonce = {
 }
 
 export default function MesAnnonces() {
-  const { user, isLoaded } = useUser()
+  const { isLoaded } = useUser()
   const { getToken, isSignedIn } = useAuth()
   const router = useRouter()
   const [annonces, setAnnonces] = useState<Annonce[]>([])
   const [loading, setLoading] = useState(true)
-
-  const pseudo = user?.username || user?.firstName || null
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) router.replace("/")
@@ -31,19 +29,35 @@ export default function MesAnnonces() {
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return
-    if (!pseudo) { setLoading(false); return }
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/user/${pseudo}`)
-      .then((res) => res.json())
-      .then((data) => { setAnnonces(data); setLoading(false) })
-  }, [isLoaded, isSignedIn, pseudo])
+    let actif = true
+    ;(async () => {
+      try {
+        const token = await getToken()
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await res.json()
+        if (actif) setAnnonces(Array.isArray(data) ? data : [])
+      } catch {
+        if (actif) setAnnonces([])
+      } finally {
+        if (actif) setLoading(false)
+      }
+    })()
+    return () => { actif = false }
+  }, [isLoaded, isSignedIn, getToken])
 
   async function supprimerAnnonce(id: number) {
     if (!confirm("Supprimer cette annonce ?")) return
     const token = await getToken()
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     })
+    if (!res.ok) {
+      alert("La suppression a échoué. Réessayez.")
+      return
+    }
     setAnnonces((prev) => prev.filter((a) => a.id !== id))
   }
 

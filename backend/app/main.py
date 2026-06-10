@@ -107,13 +107,24 @@ def root():
     return {"message": "Gen Don API"}
 
 
+TYPES_IMAGE_AUTORISES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+TAILLE_MAX_IMAGE = 10 * 1024 * 1024  # 10 Mo
+
+
 @app.post("/upload")
-async def upload_images(files: List[UploadFile] = File(...)):
+async def upload_images(
+    files: List[UploadFile] = File(...),
+    user_id: str = Depends(get_current_user_id),
+):
     if len(files) > 5:
         raise HTTPException(status_code=400, detail="Maximum 5 photos par annonce")
     urls = []
     for file in files:
+        if file.content_type not in TYPES_IMAGE_AUTORISES:
+            raise HTTPException(status_code=400, detail="Seules les images JPEG, PNG, WebP et GIF sont acceptées")
         contenu = await file.read()
+        if len(contenu) > TAILLE_MAX_IMAGE:
+            raise HTTPException(status_code=400, detail="Image trop volumineuse (max 10 Mo)")
         resultat = cloudinary.uploader.upload(
             contenu,
             folder="gendon",
@@ -180,9 +191,17 @@ def lister_annonces(
     return {"annonces": annonces, "total": total, "pages": ceil(total / LIMITE_PAR_PAGE) if total > 0 else 1, "page": page}
 
 
-@app.get("/annonces/user/{pseudo}", response_model=list[schemas.AnnonceResponse])
-def get_annonces_user(pseudo: str, db: Session = Depends(get_db)):
-    return db.query(models.Annonce).filter(models.Annonce.pseudo == pseudo).all()
+@app.get("/annonces/me", response_model=list[schemas.AnnonceResponse])
+def get_mes_annonces(
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    return (
+        db.query(models.Annonce)
+        .filter(models.Annonce.clerk_user_id == user_id)
+        .order_by(models.Annonce.created_at.desc())
+        .all()
+    )
 
 
 @app.get("/annonces/{annonce_id}", response_model=schemas.AnnonceResponse)

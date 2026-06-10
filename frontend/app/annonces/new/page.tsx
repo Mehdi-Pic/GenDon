@@ -80,8 +80,10 @@ export default function NewAnnonce() {
       const formData = new FormData()
       formData.append("files", compressed)
 
+      const token = await getToken()
       const uploadRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/upload`, {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       })
       const uploadData = await uploadRes.json()

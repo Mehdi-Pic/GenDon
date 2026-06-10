@@ -7,8 +7,8 @@ import Link from "next/link"
 import { SignInButton, Show, UserButton } from "@clerk/nextjs"
 
 const categories = [
-  "Immobilier", "Véhicules", "Vacances", "Emploi", "Mode",
-  "Maison & Jardin", "Famille", "Électronique", "Loisirs", "Autres"
+  "Immobilier", "Véhicules", "Vêtements", "Maison & Jardin",
+  "Électronique", "Loisirs", "Sport", "Autres"
 ]
 
 function SearchBar() {

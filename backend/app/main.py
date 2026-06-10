@@ -119,6 +119,7 @@ def lister_annonces(
     photos: bool = False,
     periode: str = None,
     page: int = 1,
+    exclude_user_id: str = None,
     db: Session = Depends(get_db),
 ):
     query = db.query(models.Annonce)
@@ -131,6 +132,8 @@ def lister_annonces(
         )
     if quartier:
         query = query.filter(models.Annonce.quartier == quartier)
+    if exclude_user_id:
+        query = query.filter(models.Annonce.clerk_user_id != exclude_user_id)
     if photos:
         query = query.filter(func.cardinality(models.Annonce.images) > 0)
     if periode == "semaine":

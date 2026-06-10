@@ -36,8 +36,10 @@ with engine.connect() as conn:
 app = FastAPI(title="Gen Don API")
 
 _origins = ["http://localhost:3000"]
-if os.getenv("FRONTEND_URL"):
-    _origins.append(os.getenv("FRONTEND_URL"))
+for _url in os.getenv("FRONTEND_URL", "").split(","):
+    _url = _url.strip()
+    if _url:
+        _origins.append(_url)
 
 app.add_middleware(
     CORSMiddleware,

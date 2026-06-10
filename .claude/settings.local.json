@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"d:\\\\Projets_Gennevilliers_Leboncoin\" -Force)",
+      "PowerShell(Get-ChildItem -Path \"d:\\\\Projets_Gennevilliers_Leboncoin\\\\backend\" -Directory -Force | Where-Object { $_.Name -notlike \"venv\" })",
+      "PowerShell(Get-ChildItem -Path \"d:\\\\Projets_Gennevilliers_Leboncoin\\\\backend\\\\app\" -Recurse -File | Where-Object { $_.Extension -in \".py\", \".txt\", \".json\", \".toml\", \".cfg\", \".yml\", \".yaml\", \".ini\" } | Select-Object FullName)",
+      "PowerShell(Get-ChildItem -Path \"d:\\\\Projets_Gennevilliers_Leboncoin\\\\frontend\" -File -Force | Where-Object { $_.Extension -in \".json\", \".ts\", \".mjs\", \".md\" } | Select-Object Name)",
+      "PowerShell(Get-ChildItem -Path \"d:\\\\Projets_Gennevilliers_Leboncoin\\\\frontend\\\\app\" -Recurse -File | Where-Object { $_.Extension -in \".css\", \".module.css\" } | Select-Object Name)",
+      "Bash(find d:\\\\\\\\Projets_Gennevilliers_Leboncoin\\\\\\\\frontend\\\\\\\\app -name \"*.css\" -o -name \"globals.css\")"
+    ]
+  }
+}

@@ -15,6 +15,7 @@ from typing import List
 from datetime import datetime, timedelta, timezone
 from math import ceil
 from html import escape
+from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
 import os
 
@@ -35,7 +36,19 @@ with engine.connect() as conn:
         conn.execute(text("ALTER TABLE annonces ADD COLUMN clerk_user_id VARCHAR(100)"))
         conn.commit()
 
-app = FastAPI(title="Gen Don API")
+scheduler = BackgroundScheduler(daemon=True)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # purger_annonces_expirees est défini plus bas (résolu au démarrage)
+    scheduler.add_job(purger_annonces_expirees, "interval", hours=24)
+    scheduler.start()
+    yield
+    scheduler.shutdown(wait=False)
+
+
+app = FastAPI(title="Gen Don API", lifespan=lifespan)
 
 _origins = ["http://localhost:3000"]
 for _url in os.getenv("FRONTEND_URL", "").split(","):
@@ -90,16 +103,6 @@ def purger_annonces_expirees():
         db.rollback()
     finally:
         db.close()
-
-
-scheduler = BackgroundScheduler(daemon=True)
-scheduler.add_job(purger_annonces_expirees, "interval", hours=24)
-scheduler.start()
-
-
-@app.on_event("shutdown")
-def shutdown_scheduler():
-    scheduler.shutdown(wait=False)
 
 
 @app.get("/")
@@ -209,23 +212,6 @@ def get_annonce(annonce_id: int, db: Session = Depends(get_db)):
     annonce = db.query(models.Annonce).filter(models.Annonce.id == annonce_id).first()
     if not annonce:
         raise HTTPException(status_code=404, detail="Annonce introuvable")
-    return annonce
-
-
-@app.patch("/annonces/{annonce_id}/images")
-def update_images(
-    annonce_id: int,
-    data: dict,
-    db: Session = Depends(get_db),
-    user_id: str = Depends(get_current_user_id),
-):
-    annonce = db.query(models.Annonce).filter(models.Annonce.id == annonce_id).first()
-    if not annonce:
-        raise HTTPException(status_code=404, detail="Annonce introuvable")
-    verifier_proprietaire(annonce, user_id)
-    annonce.images = data.get("images", [])
-    db.commit()
-    db.refresh(annonce)
     return annonce
 
 

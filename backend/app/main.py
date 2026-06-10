@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, text, inspect as sa_inspect
 from pydantic import BaseModel as PydanticBase
 from . import models, schemas
-from .database import engine, get_db
+from .database import engine, get_db, SessionLocal
 from .auth import get_current_user_id
 import httpx
 import resend
@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from typing import List
 from datetime import datetime, timedelta, timezone
 from math import ceil
+from apscheduler.schedulers.background import BackgroundScheduler
 import os
 
 load_dotenv()
@@ -72,6 +73,25 @@ def supprimer_images_cloudinary(urls: list) -> None:
 def verifier_proprietaire(annonce: models.Annonce, user_id: str) -> None:
     if annonce.clerk_user_id and annonce.clerk_user_id != user_id:
         raise HTTPException(status_code=403, detail="Vous n'êtes pas le propriétaire de cette annonce")
+
+
+def purger_annonces_expirees():
+    db = SessionLocal()
+    try:
+        limite = datetime.now(timezone.utc) - timedelta(days=30)
+        expirees = db.query(models.Annonce).filter(models.Annonce.created_at < limite).all()
+        for annonce in expirees:
+            supprimer_images_cloudinary(annonce.images or [])
+            db.delete(annonce)
+        if expirees:
+            db.commit()
+    finally:
+        db.close()
+
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(purger_annonces_expirees, "interval", hours=24)
+scheduler.start()
 
 
 @app.get("/")

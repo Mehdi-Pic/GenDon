@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import imageCompression from "browser-image-compression"
 
 const categories = [
-  "Immobilier", "Véhicules", "Vêtements", "Maison & Jardin",
+  "Immobilier", "Vêtements", "Maison & Jardin",
   "Électronique", "Loisirs", "Sport", "Autres"
 ]
 const quartiers = ["Les Grésillons", "Les Chevrins", "Les Agnettes", "Le Village", "Le Luth", "Le Fossé de l'Aumône", "Chandon - Brénu - Sévines"]

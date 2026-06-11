@@ -43,14 +43,18 @@ with engine.connect() as conn:
     if "vues" not in colonnes:
         conn.execute(text("ALTER TABLE annonces ADD COLUMN vues INTEGER NOT NULL DEFAULT 0"))
         conn.commit()
+    if "rappel_envoye" not in colonnes:
+        conn.execute(text("ALTER TABLE annonces ADD COLUMN rappel_envoye BOOLEAN NOT NULL DEFAULT FALSE"))
+        conn.commit()
 
 scheduler = BackgroundScheduler(daemon=True)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # purger_annonces_expirees est défini plus bas (résolu au démarrage)
+    # Les jobs sont définis plus bas (résolus au démarrage)
     scheduler.add_job(purger_annonces_expirees, "interval", hours=24)
+    scheduler.add_job(envoyer_rappels_expiration, "interval", hours=24)
     scheduler.start()
     yield
     scheduler.shutdown(wait=False)
@@ -124,6 +128,67 @@ def purger_annonces_expirees():
             db.commit()
     except Exception:
         db.rollback()
+    finally:
+        db.close()
+
+
+def _email_principal(user: dict):
+    primary_id = user.get("primary_email_address_id")
+    return next((e["email_address"] for e in user.get("email_addresses", []) if e["id"] == primary_id), None)
+
+
+def envoyer_rappels_expiration():
+    """Tâche quotidienne : prévient les donneurs 3 jours avant la suppression auto (30 j)."""
+    db = SessionLocal()
+    try:
+        limite = datetime.now(timezone.utc) - timedelta(days=27)
+        a_rappeler = (
+            db.query(models.Annonce)
+            .filter(models.Annonce.created_at < limite, models.Annonce.rappel_envoye == False)
+            .all()
+        )
+        if not a_rappeler:
+            return
+        clerk_secret = os.getenv("CLERK_SECRET_KEY")
+        resend.api_key = os.getenv("RESEND_API_KEY")
+        frontend = os.getenv("FRONTEND_URL", "").split(",")[0].strip() or "https://www.gendon.fr"
+        for annonce in a_rappeler:
+            try:
+                email = None
+                if annonce.clerk_user_id:
+                    res = httpx.get(
+                        f"https://api.clerk.com/v1/users/{annonce.clerk_user_id}",
+                        headers={"Authorization": f"Bearer {clerk_secret}"},
+                        timeout=10,
+                    )
+                    if res.is_success:
+                        email = _email_principal(res.json())
+                if email:
+                    resend.Emails.send({
+                        "from": f"GenDon <{os.getenv('RESEND_FROM_EMAIL', 'onboarding@resend.dev')}>",
+                        "to": [email],
+                        "subject": f"Votre annonce « {annonce.titre} » expire dans 3 jours",
+                        "html": f"""
+                        <div style="font-family:sans-serif;max-width:560px;margin:auto;color:#111">
+                          <p style="font-size:18px;font-weight:700;margin-bottom:4px">Votre annonce expire bientôt</p>
+                          <p style="color:#6b7280;margin-top:0">via <strong>GenDon</strong> — Gennevilliers</p>
+                          <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+                          <p>Votre annonce :</p>
+                          <p style="background:#f9fafb;border-left:3px solid #16a34a;padding:12px 16px;border-radius:4px;font-weight:600">{escape(annonce.titre)}</p>
+                          <p>sera <strong>supprimée automatiquement dans 3 jours</strong> (les annonces GenDon restent en ligne 30 jours).</p>
+                          <p style="margin-top:16px">Objet déjà donné ? Rien à faire, ou supprimez-la dès maintenant depuis
+                            <a href="{frontend}/profil" style="color:#16a34a">votre profil</a>.</p>
+                          <p>Toujours disponible ? Vous pourrez republier une annonce après sa suppression.</p>
+                          <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+                          <p style="color:#9ca3af;font-size:12px">GenDon · Dons gratuits entre habitants de Gennevilliers</p>
+                        </div>
+                        """,
+                    })
+                # Marqué même sans email trouvé : inutile de réessayer chaque jour
+                annonce.rappel_envoye = True
+                db.commit()
+            except Exception:
+                db.rollback()
     finally:
         db.close()
 

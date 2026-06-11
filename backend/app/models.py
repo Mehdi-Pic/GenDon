@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ARRAY, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, DateTime, ARRAY, Boolean, ForeignKey, UniqueConstraint
 from sqlalchemy.sql import func
 from .database import Base
 
@@ -16,6 +16,7 @@ class Annonce(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     clerk_user_id = Column(String(100), nullable=True)
     vues = Column(Integer, nullable=False, default=0, server_default="0")
+    rappel_envoye = Column(Boolean, nullable=False, default=False, server_default="false")
 
 
 class Favori(Base):

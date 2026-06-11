@@ -5,7 +5,7 @@ from sqlalchemy import func, text, inspect as sa_inspect
 from pydantic import BaseModel as PydanticBase, Field
 from . import models, schemas
 from .database import engine, get_db, SessionLocal
-from .auth import get_current_user_id
+from .auth import get_current_user_id, get_user_id_optionnel
 import httpx
 import resend
 import cloudinary
@@ -186,8 +186,8 @@ def lister_annonces(
     photos: bool = False,
     periode: str = None,
     page: int = 1,
-    exclude_user_id: str = None,
     db: Session = Depends(get_db),
+    user_id: str = Depends(get_user_id_optionnel),
 ):
     page = max(1, page)
     query = db.query(models.Annonce)
@@ -200,9 +200,10 @@ def lister_annonces(
         )
     if quartier:
         query = query.filter(models.Annonce.quartier == quartier)
-    if exclude_user_id:
+    if user_id:
+        # L'utilisateur connecté ne voit pas ses propres annonces dans le listing
         query = query.filter(
-            (models.Annonce.clerk_user_id != exclude_user_id) |
+            (models.Annonce.clerk_user_id != user_id) |
             (models.Annonce.clerk_user_id == None)
         )
     if photos:
@@ -234,10 +235,15 @@ def get_mes_annonces(
 
 
 @app.get("/annonces/{annonce_id}", response_model=schemas.AnnonceResponse)
-def get_annonce(annonce_id: int, db: Session = Depends(get_db)):
+def get_annonce(
+    annonce_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_user_id_optionnel),
+):
     annonce = db.query(models.Annonce).filter(models.Annonce.id == annonce_id).first()
     if not annonce:
         raise HTTPException(status_code=404, detail="Annonce introuvable")
+    annonce.est_proprietaire = bool(user_id and annonce.clerk_user_id == user_id)
     return annonce
 
 

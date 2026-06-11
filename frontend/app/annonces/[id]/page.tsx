@@ -1,19 +1,25 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { MapPin, User, ArrowLeft } from "lucide-react"
+import { MapPin, User, ArrowLeft, Pencil } from "lucide-react"
+import { auth } from "@clerk/nextjs/server"
 import ImageCarousel from "../../components/ImageCarousel"
 import ContactButton from "./ContactButton"
 import type { Annonce } from "../../lib/annonces"
 
-async function getAnnonce(id: string): Promise<Annonce | null> {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}`, { cache: "no-store" })
+async function getAnnonce(id: string, token?: string | null): Promise<Annonce | null> {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}`, {
+    cache: "no-store",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
   if (!res.ok) return null
   return res.json()
 }
 
 export default async function AnnonceDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const annonce = await getAnnonce(id)
+  const { userId, getToken } = await auth()
+  const token = userId ? await getToken() : null
+  const annonce = await getAnnonce(id, token)
 
   if (!annonce) notFound()
 
@@ -41,7 +47,17 @@ export default async function AnnonceDetail({ params }: { params: Promise<{ id: 
             @{annonce.pseudo}
           </div>
         </div>
-        <ContactButton annonceId={annonce.id} titreDon={annonce.titre} />
+        {annonce.est_proprietaire ? (
+          <div className="flex items-center justify-between bg-gray-50 rounded-2xl px-5 py-4">
+            <p className="text-sm font-medium text-gray-600">C&apos;est votre annonce.</p>
+            <Link href={`/mes-annonces/${annonce.id}/modifier`} className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-700 text-white px-4 py-2 rounded-full text-sm font-semibold transition-colors">
+              <Pencil className="w-4 h-4" aria-hidden="true" />
+              Modifier
+            </Link>
+          </div>
+        ) : (
+          <ContactButton annonceId={annonce.id} titreDon={annonce.titre} />
+        )}
       </div>
     </main>
   )

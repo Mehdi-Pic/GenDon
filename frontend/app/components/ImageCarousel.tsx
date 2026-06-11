@@ -11,7 +11,7 @@ export default function ImageCarousel({ images }: { images: string[] }) {
 
   if (!images || images.length === 0) {
     return (
-      <div className="w-full h-80 bg-gray-100 flex items-center justify-center rounded-2xl mb-8">
+      <div className="w-full h-64 sm:h-80 bg-gray-100 flex items-center justify-center rounded-2xl mb-8">
         <span className="text-gray-400">Pas de photo</span>
       </div>
     )
@@ -36,7 +36,7 @@ export default function ImageCarousel({ images }: { images: string[] }) {
   return (
     <>
       {imageAgrandie && (
-        <div onClick={() => setImageAgrandie(null)} className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-16">
+        <div onClick={() => setImageAgrandie(null)} className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 sm:p-16">
           <button onClick={() => setImageAgrandie(null)} className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 rounded-full p-2 transition-colors">
             <X className="w-6 h-6 text-white" />
           </button>
@@ -59,7 +59,7 @@ export default function ImageCarousel({ images }: { images: string[] }) {
                 src={img}
                 alt={`Photo ${i + 1}`}
                 onClick={() => setImageAgrandie(img)}
-                className="w-full h-80 object-contain bg-gray-50 cursor-pointer shrink-0"
+                className="w-full h-64 sm:h-80 object-contain bg-gray-50 cursor-pointer shrink-0"
               />
             ))}
           </div>

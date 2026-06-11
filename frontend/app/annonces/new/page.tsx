@@ -156,7 +156,7 @@ export default function NewAnnonce() {
             <p className="text-xs text-gray-400 mt-2">JPG, PNG acceptés. Max 5 photos.</p>
             {erreurUpload && <p className="text-red-500 text-xs mt-1">{erreurUpload}</p>}
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Catégorie <span className="text-red-500">*</span></label>
               <select value={categorie} onChange={(e) => { setCategorie(e.target.value); setErrors((prev) => ({ ...prev, categorie: undefined })) }} aria-invalid={!!errors.categorie} className={`w-full bg-white border rounded-xl px-4 py-3 text-gray-900 focus:outline-none transition-colors ${errors.categorie ? "border-red-400" : "border-gray-200 focus:border-green-500"}`}>

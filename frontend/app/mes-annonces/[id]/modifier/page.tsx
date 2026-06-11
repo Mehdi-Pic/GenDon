@@ -201,7 +201,7 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
             {erreurUpload && <p className="text-red-500 text-xs mt-1">{erreurUpload}</p>}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Catégorie</label>
               <select value={categorie} onChange={(e) => setCategorie(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:outline-none focus:border-green-500">

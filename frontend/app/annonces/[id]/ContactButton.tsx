@@ -46,7 +46,7 @@ export default function ContactButton({ annonceId, titreDon }: { annonceId: numb
   if (!isSignedIn) {
     return (
       <SignInButton mode="modal">
-        <button className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-semibold transition-colors text-base">
+        <button className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 hover:shadow-lg hover:shadow-green-200 text-white py-3 rounded-full font-semibold transition-all text-base">
           <Mail className="w-5 h-5" />
           Contacter le donneur
         </button>
@@ -58,7 +58,7 @@ export default function ContactButton({ annonceId, titreDon }: { annonceId: numb
     <>
       <button
         onClick={() => setOuvert(true)}
-        className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-semibold transition-colors text-base"
+        className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 hover:shadow-lg hover:shadow-green-200 text-white py-3 rounded-full font-semibold transition-all text-base"
       >
         <Mail className="w-5 h-5" />
         Contacter le donneur
@@ -66,7 +66,7 @@ export default function ContactButton({ annonceId, titreDon }: { annonceId: numb
 
       {ouvert && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 relative">
+          <div className="bg-white rounded-3xl shadow-2xl ring-1 ring-gray-100 w-full max-w-md p-6 relative">
             <button
               onClick={fermer}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 transition-colors"
@@ -84,7 +84,7 @@ export default function ContactButton({ annonceId, titreDon }: { annonceId: numb
                 <p className="text-gray-500 text-sm">Le donneur a reçu votre message. Il pourra vous répondre directement par email.</p>
                 <button
                   onClick={fermer}
-                  className="mt-6 bg-gray-900 hover:bg-gray-700 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                  className="mt-6 bg-gray-900 hover:bg-gray-700 text-white px-6 py-2.5 rounded-full text-sm font-semibold transition-colors"
                 >
                   Fermer
                 </button>
@@ -109,14 +109,14 @@ export default function ContactButton({ annonceId, titreDon }: { annonceId: numb
                 <div className="flex gap-3 mt-4">
                   <button
                     onClick={fermer}
-                    className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:border-gray-400 transition-colors"
+                    className="flex-1 py-2.5 border border-gray-200 rounded-full text-sm font-medium text-gray-600 hover:border-gray-400 transition-colors"
                   >
                     Annuler
                   </button>
                   <button
                     onClick={envoyer}
                     disabled={etat === "envoi" || !message.trim()}
-                    className="flex-1 py-2.5 bg-green-600 hover:bg-green-500 disabled:bg-gray-300 text-white rounded-xl text-sm font-semibold transition-colors"
+                    className="flex-1 py-2.5 bg-green-600 hover:bg-green-500 disabled:bg-gray-300 text-white rounded-full text-sm font-semibold transition-colors"
                   >
                     {etat === "envoi" ? "Envoi…" : "Envoyer"}
                   </button>

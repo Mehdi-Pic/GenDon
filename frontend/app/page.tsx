@@ -15,7 +15,7 @@ export default function Home() {
             <MapPin className="w-3 h-3" />
             Gennevilliers 92230
           </div>
-          <h1 className="text-5xl font-black tracking-tight text-white mb-4 leading-tight drop-shadow-lg">
+          <h1 className="text-5xl sm:text-6xl font-black tracking-tight text-white mb-4 leading-tight drop-shadow-lg">
             Donnez une seconde vie<br />
             <span className="text-green-400">près de chez vous.</span>
           </h1>
@@ -23,11 +23,11 @@ export default function Home() {
             La plateforme de dons entre habitants de Gennevilliers. Zéro argent, zéro transaction — juste du lien local.
           </p>
           <div className="flex items-center justify-center gap-4">
-            <Link href="/annonces" className="flex items-center gap-2 bg-white text-gray-900 hover:bg-gray-100 px-6 py-3 rounded-xl font-semibold transition-colors">
+            <Link href="/annonces" className="group flex items-center gap-2 bg-white text-gray-900 hover:bg-gray-100 px-7 py-3.5 rounded-full font-semibold transition-all hover:shadow-xl">
               Voir les dons
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </Link>
-            <Link href="/annonces/new" className="flex items-center gap-2 border border-white/50 hover:border-white hover:bg-white/10 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
+            <Link href="/annonces/new" className="flex items-center gap-2 border border-white/50 hover:border-white hover:bg-white/10 backdrop-blur-sm text-white px-7 py-3.5 rounded-full font-semibold transition-colors">
               Déposer un don
             </Link>
           </div>
@@ -35,23 +35,23 @@ export default function Home() {
       </section>
 
       <section className="border-t border-gray-100">
-        <div className="max-w-6xl mx-auto px-6 py-16 grid grid-cols-1 sm:grid-cols-3 gap-12">
-          <div className="text-center">
-            <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <div className="max-w-6xl mx-auto px-6 py-16 grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div className="text-center bg-gray-50 rounded-3xl p-8 hover:bg-green-50/60 hover:-translate-y-1 transition-all duration-300">
+            <div className="w-12 h-12 bg-white shadow-sm rounded-2xl flex items-center justify-center mx-auto mb-4">
               <Heart className="w-6 h-6 text-green-600" />
             </div>
             <h3 className="font-bold text-gray-900 mb-2">100% gratuit</h3>
             <p className="text-sm text-gray-500 leading-relaxed">Pas de frais, pas de commission. Les objets trouvent une nouvelle vie gratuitement.</p>
           </div>
-          <div className="text-center">
-            <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <div className="text-center bg-gray-50 rounded-3xl p-8 hover:bg-green-50/60 hover:-translate-y-1 transition-all duration-300">
+            <div className="w-12 h-12 bg-white shadow-sm rounded-2xl flex items-center justify-center mx-auto mb-4">
               <MapPin className="w-6 h-6 text-green-600" />
             </div>
             <h3 className="font-bold text-gray-900 mb-2">100% local</h3>
             <p className="text-sm text-gray-500 leading-relaxed">Uniquement à Gennevilliers. Vos voisins, votre quartier, votre ville.</p>
           </div>
-          <div className="text-center">
-            <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <div className="text-center bg-gray-50 rounded-3xl p-8 hover:bg-green-50/60 hover:-translate-y-1 transition-all duration-300">
+            <div className="w-12 h-12 bg-white shadow-sm rounded-2xl flex items-center justify-center mx-auto mb-4">
               <Zap className="w-6 h-6 text-green-600" />
             </div>
             <h3 className="font-bold text-gray-900 mb-2">Simple & rapide</h3>

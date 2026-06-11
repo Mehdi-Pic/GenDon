@@ -1,9 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Upload, X, CheckCircle } from "lucide-react"
-import { useUser, useAuth } from "@clerk/nextjs"
-import { useRouter } from "next/navigation"
+import { useUser, useAuth, SignInButton } from "@clerk/nextjs"
 import Link from "next/link"
 import { CATEGORIES as categories, QUARTIERS as quartiers } from "../../lib/annonces"
 import { useImageUpload } from "../../lib/useImageUpload"
@@ -18,7 +17,6 @@ type Errors = {
 export default function NewAnnonce() {
   const { user, isLoaded } = useUser()
   const { getToken, isSignedIn } = useAuth()
-  const router = useRouter()
   const [titre, setTitre] = useState("")
   const [description, setDescription] = useState("")
   const [categorie, setCategorie] = useState("")
@@ -29,11 +27,23 @@ export default function NewAnnonce() {
   const [loading, setLoading] = useState(false)
   const [erreurSubmit, setErreurSubmit] = useState("")
 
-  useEffect(() => {
-    if (isLoaded && !isSignedIn) router.replace("/")
-  }, [isLoaded, isSignedIn, router])
+  if (!isLoaded) return null
 
-  if (!isLoaded || !isSignedIn) return null
+  if (!isSignedIn) {
+    return (
+      <main>
+        <div className="max-w-2xl mx-auto px-6 py-24 text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Connectez-vous pour déposer un don</h1>
+          <p className="text-gray-500 mb-8">La création d&apos;une annonce nécessite un compte — c&apos;est gratuit et rapide.</p>
+          <SignInButton mode="modal">
+            <button className="bg-green-600 hover:bg-green-500 hover:shadow-lg hover:shadow-green-200 text-white px-8 py-3 rounded-full font-semibold transition-all">
+              Se connecter
+            </button>
+          </SignInButton>
+        </div>
+      </main>
+    )
+  }
 
   function supprimerImage(index: number) {
     setImageStates((prev) => prev.filter((_, i) => i !== index))

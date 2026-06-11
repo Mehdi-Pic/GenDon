@@ -7,6 +7,7 @@ import { vignette } from "../lib/annonces"
 export default function ImageCarousel({ images }: { images: string[] }) {
   const [index, setIndex] = useState(0)
   const [imageAgrandie, setImageAgrandie] = useState<string | null>(null)
+  const [touchDepartX, setTouchDepartX] = useState<number | null>(null)
 
   if (!images || images.length === 0) {
     return (
@@ -24,6 +25,14 @@ export default function ImageCarousel({ images }: { images: string[] }) {
     setIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1))
   }
 
+  function finSwipe(e: React.TouchEvent) {
+    if (touchDepartX === null) return
+    const delta = e.changedTouches[0].clientX - touchDepartX
+    if (delta > 50) precedent()
+    else if (delta < -50) suivant()
+    setTouchDepartX(null)
+  }
+
   return (
     <>
       {imageAgrandie && (
@@ -35,8 +44,25 @@ export default function ImageCarousel({ images }: { images: string[] }) {
         </div>
       )}
       <div className="mb-8">
-        <div className="relative rounded-3xl overflow-hidden mb-3 bg-gray-50 ring-1 ring-gray-100">
-          <img src={images[index]} alt={`Photo ${index + 1}`} onClick={() => setImageAgrandie(images[index])} className="w-full h-80 object-contain bg-gray-50 cursor-pointer" />
+        <div
+          className="relative rounded-3xl overflow-hidden mb-3 bg-gray-50 ring-1 ring-gray-100"
+          onTouchStart={(e) => setTouchDepartX(e.touches[0].clientX)}
+          onTouchEnd={finSwipe}
+        >
+          <div
+            className="flex transition-transform duration-500 ease-out"
+            style={{ transform: `translateX(-${index * 100}%)` }}
+          >
+            {images.map((img, i) => (
+              <img
+                key={i}
+                src={img}
+                alt={`Photo ${i + 1}`}
+                onClick={() => setImageAgrandie(img)}
+                className="w-full h-80 object-contain bg-gray-50 cursor-pointer shrink-0"
+              />
+            ))}
+          </div>
           {images.length > 1 && (
             <>
               <button onClick={precedent} className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full p-2 transition-colors" aria-label="Image précédente">

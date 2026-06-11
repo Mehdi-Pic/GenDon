@@ -4,6 +4,7 @@ import { MapPin, User, ArrowLeft, Pencil } from "lucide-react"
 import { auth } from "@clerk/nextjs/server"
 import ImageCarousel from "../../components/ImageCarousel"
 import ContactButton from "./ContactButton"
+import ShareButton from "./ShareButton"
 import type { Annonce } from "../../lib/annonces"
 
 async function getAnnonce(id: string, token?: string | null): Promise<Annonce | null> {
@@ -45,6 +46,9 @@ export default async function AnnonceDetail({ params }: { params: Promise<{ id: 
           <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-full px-4 py-2">
             <User className="w-4 h-4 text-green-600" aria-hidden="true" />
             @{annonce.pseudo}
+          </div>
+          <div className="ml-auto">
+            <ShareButton titre={annonce.titre} />
           </div>
         </div>
         {annonce.est_proprietaire ? (

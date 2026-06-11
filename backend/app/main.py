@@ -255,15 +255,7 @@ def get_annonce(
     annonce = db.query(models.Annonce).filter(models.Annonce.id == annonce_id).first()
     if not annonce:
         raise HTTPException(status_code=404, detail="Annonce introuvable")
-    est_proprietaire = bool(user_id and annonce.clerk_user_id == user_id)
-    if not est_proprietaire:
-        # Incrément atomique, le propriétaire ne compte pas ses propres visites
-        db.query(models.Annonce).filter(models.Annonce.id == annonce_id).update(
-            {models.Annonce.vues: models.Annonce.vues + 1}
-        )
-        db.commit()
-        db.refresh(annonce)
-    annonce.est_proprietaire = est_proprietaire
+    annonce.est_proprietaire = bool(user_id and annonce.clerk_user_id == user_id)
     if user_id:
         annonce.est_favori = (
             db.query(models.Favori)
@@ -292,6 +284,25 @@ def modifier_annonce(
     db.commit()
     db.refresh(annonce)
     return annonce
+
+
+@app.post("/annonces/{annonce_id}/vue")
+def compter_vue(
+    annonce_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_user_id_optionnel),
+):
+    """Appelé par le navigateur à l'affichage réel de la page (pas par les bots/prefetch/metadata)."""
+    annonce = db.query(models.Annonce).filter(models.Annonce.id == annonce_id).first()
+    if not annonce:
+        raise HTTPException(status_code=404, detail="Annonce introuvable")
+    if user_id and annonce.clerk_user_id == user_id:
+        return {"comptee": False}
+    db.query(models.Annonce).filter(models.Annonce.id == annonce_id).update(
+        {models.Annonce.vues: models.Annonce.vues + 1}
+    )
+    db.commit()
+    return {"comptee": True}
 
 
 @app.post("/annonces/{annonce_id}/favori")

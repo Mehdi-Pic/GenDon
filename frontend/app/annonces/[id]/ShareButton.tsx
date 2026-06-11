@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Share2, Copy, Check, Mail, MessageCircle, MoreHorizontal, X } from "lucide-react"
+import { Share2, Copy, Check, MessageCircle, MoreHorizontal, X } from "lucide-react"
 
 export default function ShareButton({ titre }: { titre: string }) {
   const [ouvert, setOuvert] = useState(false)
@@ -26,10 +26,6 @@ export default function ShareButton({ titre }: { titre: string }) {
 
   function partagerWhatsApp() {
     window.open(`https://wa.me/?text=${encodeURIComponent(`${texte}\n${window.location.href}`)}`, "_blank", "noopener")
-  }
-
-  function partagerEmail() {
-    window.location.href = `mailto:?subject=${encodeURIComponent(texte)}&body=${encodeURIComponent(`Regarde cette annonce sur GenDon :\n${window.location.href}`)}`
   }
 
   function partageNatif() {
@@ -79,14 +75,6 @@ export default function ShareButton({ titre }: { titre: string }) {
               >
                 <MessageCircle className="w-5 h-5 text-green-600" />
                 <span className="text-sm font-medium text-gray-700">WhatsApp</span>
-              </button>
-
-              <button
-                onClick={partagerEmail}
-                className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl hover:bg-gray-50 transition-colors text-left"
-              >
-                <Mail className="w-5 h-5 text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">Email</span>
               </button>
 
               {natifDispo && (

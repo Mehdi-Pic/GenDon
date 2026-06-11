@@ -40,6 +40,9 @@ with engine.connect() as conn:
     if "clerk_user_id" not in colonnes:
         conn.execute(text("ALTER TABLE annonces ADD COLUMN clerk_user_id VARCHAR(100)"))
         conn.commit()
+    if "vues" not in colonnes:
+        conn.execute(text("ALTER TABLE annonces ADD COLUMN vues INTEGER NOT NULL DEFAULT 0"))
+        conn.commit()
 
 scheduler = BackgroundScheduler(daemon=True)
 
@@ -218,6 +221,15 @@ def lister_annonces(
         query = query.order_by(models.Annonce.created_at.desc())
     total = query.count()
     annonces = query.offset((page - 1) * LIMITE_PAR_PAGE).limit(LIMITE_PAR_PAGE).all()
+    if user_id and annonces:
+        ids = [a.id for a in annonces]
+        favoris_ids = {
+            aid for (aid,) in db.query(models.Favori.annonce_id)
+            .filter(models.Favori.clerk_user_id == user_id, models.Favori.annonce_id.in_(ids))
+            .all()
+        }
+        for a in annonces:
+            a.est_favori = a.id in favoris_ids
     return {"annonces": annonces, "total": total, "pages": ceil(total / LIMITE_PAR_PAGE) if total > 0 else 1, "page": page}
 
 
@@ -243,7 +255,22 @@ def get_annonce(
     annonce = db.query(models.Annonce).filter(models.Annonce.id == annonce_id).first()
     if not annonce:
         raise HTTPException(status_code=404, detail="Annonce introuvable")
-    annonce.est_proprietaire = bool(user_id and annonce.clerk_user_id == user_id)
+    est_proprietaire = bool(user_id and annonce.clerk_user_id == user_id)
+    if not est_proprietaire:
+        # Incrément atomique, le propriétaire ne compte pas ses propres visites
+        db.query(models.Annonce).filter(models.Annonce.id == annonce_id).update(
+            {models.Annonce.vues: models.Annonce.vues + 1}
+        )
+        db.commit()
+        db.refresh(annonce)
+    annonce.est_proprietaire = est_proprietaire
+    if user_id:
+        annonce.est_favori = (
+            db.query(models.Favori)
+            .filter(models.Favori.clerk_user_id == user_id, models.Favori.annonce_id == annonce_id)
+            .first()
+            is not None
+        )
     return annonce
 
 
@@ -265,6 +292,58 @@ def modifier_annonce(
     db.commit()
     db.refresh(annonce)
     return annonce
+
+
+@app.post("/annonces/{annonce_id}/favori")
+def ajouter_favori(
+    annonce_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    annonce = db.query(models.Annonce).filter(models.Annonce.id == annonce_id).first()
+    if not annonce:
+        raise HTTPException(status_code=404, detail="Annonce introuvable")
+    if annonce.clerk_user_id == user_id:
+        raise HTTPException(status_code=400, detail="Vous ne pouvez pas mettre votre propre annonce en favori")
+    existe = (
+        db.query(models.Favori)
+        .filter(models.Favori.clerk_user_id == user_id, models.Favori.annonce_id == annonce_id)
+        .first()
+    )
+    if not existe:
+        db.add(models.Favori(clerk_user_id=user_id, annonce_id=annonce_id))
+        db.commit()
+    return {"est_favori": True}
+
+
+@app.delete("/annonces/{annonce_id}/favori")
+def retirer_favori(
+    annonce_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    db.query(models.Favori).filter(
+        models.Favori.clerk_user_id == user_id, models.Favori.annonce_id == annonce_id
+    ).delete()
+    db.commit()
+    return {"est_favori": False}
+
+
+@app.get("/favoris", response_model=list[schemas.AnnonceResponse])
+def mes_favoris(
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    annonces = (
+        db.query(models.Annonce)
+        .join(models.Favori, models.Favori.annonce_id == models.Annonce.id)
+        .filter(models.Favori.clerk_user_id == user_id)
+        .order_by(models.Favori.created_at.desc())
+        .all()
+    )
+    for a in annonces:
+        a.est_favori = True
+    return annonces
 
 
 class MessageContact(PydanticBase):

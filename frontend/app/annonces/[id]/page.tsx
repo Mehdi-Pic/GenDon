@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { MapPin, User, ArrowLeft, Pencil } from "lucide-react"
+import { MapPin, User, ArrowLeft, Pencil, Eye } from "lucide-react"
 import { auth } from "@clerk/nextjs/server"
 import ImageCarousel from "../../components/ImageCarousel"
 import ContactButton from "./ContactButton"
 import ShareButton from "./ShareButton"
+import FavoriButton from "../../components/FavoriButton"
 import type { Annonce } from "../../lib/annonces"
 
 async function getAnnonce(id: string, token?: string | null): Promise<Annonce | null> {
@@ -47,7 +48,14 @@ export default async function AnnonceDetail({ params }: { params: Promise<{ id: 
             <User className="w-4 h-4 text-green-600" aria-hidden="true" />
             @{annonce.pseudo}
           </div>
-          <div className="ml-auto">
+          <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-full px-4 py-2">
+            <Eye className="w-4 h-4 text-green-600" aria-hidden="true" />
+            {annonce.vues ?? 0} vue{(annonce.vues ?? 0) > 1 ? "s" : ""}
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            {!annonce.est_proprietaire && (
+              <FavoriButton annonceId={annonce.id} initial={annonce.est_favori ?? false} />
+            )}
             <ShareButton titre={annonce.titre} />
           </div>
         </div>

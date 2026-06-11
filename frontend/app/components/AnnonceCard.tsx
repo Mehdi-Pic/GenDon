@@ -1,6 +1,7 @@
 import { MapPin } from "lucide-react"
 import Link from "next/link"
 import { vignette, type Annonce } from "../lib/annonces"
+import FavoriButton from "./FavoriButton"
 
 export default function AnnonceCard({ annonce }: { annonce: Annonce }) {
   return (
@@ -16,6 +17,9 @@ export default function AnnonceCard({ annonce }: { annonce: Annonce }) {
         <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-gray-700 text-xs font-semibold px-2.5 py-1 rounded-full">
           {annonce.categorie}
         </span>
+        <div className="absolute top-3 right-3">
+          <FavoriButton annonceId={annonce.id} initial={annonce.est_favori ?? false} />
+        </div>
       </div>
       <div className="p-3 sm:p-5 flex flex-col h-32 sm:h-40">
         <h2 className="text-gray-900 font-bold text-sm sm:text-base mb-1 leading-snug line-clamp-1">{annonce.titre}</h2>

@@ -61,6 +61,7 @@ class AnnonceResponse(BaseModel):
     images: Optional[List[str]]
     statut: str
     created_at: datetime
+    est_proprietaire: bool = False
 
     class Config:
         from_attributes = True

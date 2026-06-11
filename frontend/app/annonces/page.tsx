@@ -23,7 +23,7 @@ type ResultatPaginé = {
   page: number
 }
 
-async function getAnnonces(p: SearchParams, excludeUserId?: string | null): Promise<ResultatPaginé> {
+async function getAnnonces(p: SearchParams, token?: string | null): Promise<ResultatPaginé> {
   const base = process.env.NEXT_PUBLIC_API_URL
   const params = new URLSearchParams()
   if (p.categorie) params.set("categorie", p.categorie)
@@ -33,10 +33,12 @@ async function getAnnonces(p: SearchParams, excludeUserId?: string | null): Prom
   if (p.photos === "1") params.set("photos", "1")
   if (p.periode) params.set("periode", p.periode)
   if (p.page && p.page !== "1") params.set("page", p.page)
-  if (excludeUserId) params.set("exclude_user_id", excludeUserId)
   const qs = params.toString()
   const url = `${base}/annonces${qs ? `?${qs}` : ""}`
-  const res = await fetch(url, { cache: "no-store" })
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
   if (!res.ok) return { annonces: [], total: 0, pages: 1, page: 1 }
   return res.json()
 }
@@ -65,8 +67,9 @@ export default async function Annonces({ searchParams }: { searchParams: Promise
   const sp = await searchParams
   const { categorie, recherche } = sp
   const page = Number(sp.page ?? 1)
-  const { userId } = await auth()
-  const data = await getAnnonces(sp, userId)
+  const { userId, getToken } = await auth()
+  const token = userId ? await getToken() : null
+  const data = await getAnnonces(sp, token)
   const { annonces, total, pages } = data
 
   return (

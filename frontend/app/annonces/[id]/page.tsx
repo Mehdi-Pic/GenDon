@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { MapPin, User, ArrowLeft, Pencil, Eye } from "lucide-react"
@@ -6,7 +7,8 @@ import ImageCarousel from "../../components/ImageCarousel"
 import ContactButton from "./ContactButton"
 import ShareButton from "./ShareButton"
 import FavoriButton from "../../components/FavoriButton"
-import type { Annonce } from "../../lib/annonces"
+import VueTracker from "./VueTracker"
+import { vignette, type Annonce } from "../../lib/annonces"
 
 async function getAnnonce(id: string, token?: string | null): Promise<Annonce | null> {
   const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}`, {
@@ -15,6 +17,28 @@ async function getAnnonce(id: string, token?: string | null): Promise<Annonce | 
   })
   if (!res.ok) return null
   return res.json()
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const annonce = await getAnnonce(id)
+  if (!annonce) return { title: "Annonce introuvable" }
+  const description = annonce.description.slice(0, 160)
+  return {
+    title: annonce.titre,
+    description,
+    openGraph: {
+      title: `${annonce.titre} · Don gratuit à Gennevilliers`,
+      description,
+      type: "article",
+      images: annonce.images?.length ? [vignette(annonce.images[0], 1200)] : [],
+    },
+    twitter: {
+      card: annonce.images?.length ? "summary_large_image" : "summary",
+      title: annonce.titre,
+      description,
+    },
+  }
 }
 
 export default async function AnnonceDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -27,6 +51,7 @@ export default async function AnnonceDetail({ params }: { params: Promise<{ id: 
 
   return (
     <main>
+      <VueTracker annonceId={annonce.id} />
       <div className="max-w-3xl mx-auto px-6 py-10">
         <Link href="/annonces" className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-900 text-sm mb-8 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-green-300 rounded-lg">
           <ArrowLeft className="w-4 h-4" aria-hidden="true" />

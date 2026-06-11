@@ -121,28 +121,28 @@ export default function Profil() {
                   <div className="flex-1 min-w-0">
                     <h2 className="text-gray-900 font-bold truncate">{annonce.titre}</h2>
                     <p className="text-gray-500 text-sm line-clamp-1 mt-0.5">{annonce.description}</p>
-                    <div className="flex items-center gap-3 mt-2">
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{annonce.categorie}</span>
-                      <div className="flex items-center gap-1 text-xs text-gray-400">
-                        <MapPin className="w-3 h-3" />
-                        {annonce.quartier}
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-gray-400">
-                        <Eye className="w-3 h-3" />
-                        {annonce.vues ?? 0} vue{(annonce.vues ?? 0) > 1 ? "s" : ""}
-                      </div>
-                      <span className="text-xs text-gray-400">{new Date(annonce.created_at).toLocaleDateString("fr-FR")}</span>
-                    </div>
+                    <span className="inline-block text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full mt-2">{annonce.categorie}</span>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-auto">
-                    <Link href={`/mes-annonces/${annonce.id}/modifier`} className="flex items-center gap-1.5 border border-gray-200 hover:border-gray-400 text-gray-600 px-3 py-2 rounded-full text-sm font-medium transition-colors">
-                      <Pencil className="w-4 h-4" />
-                      Modifier
-                    </Link>
-                    <button onClick={() => supprimerAnnonce(annonce.id)} className="flex items-center gap-1.5 border border-red-100 hover:border-red-300 text-red-500 px-3 py-2 rounded-full text-sm font-medium transition-colors">
-                      <Trash2 className="w-4 h-4" />
-                      Supprimer
-                    </button>
+                  <div className="w-full flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <div className="flex items-center gap-1 text-xs text-gray-400 whitespace-nowrap">
+                      <MapPin className="w-3 h-3" />
+                      {annonce.quartier}
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-gray-400 whitespace-nowrap">
+                      <Eye className="w-3 h-3" />
+                      {annonce.vues ?? 0} vue{(annonce.vues ?? 0) > 1 ? "s" : ""}
+                    </div>
+                    <span className="text-xs text-gray-400 whitespace-nowrap">{new Date(annonce.created_at).toLocaleDateString("fr-FR")}</span>
+                    <div className="flex items-center gap-2 ml-auto">
+                      <Link href={`/mes-annonces/${annonce.id}/modifier`} className="flex items-center gap-1.5 border border-gray-200 hover:border-gray-400 text-gray-600 px-3 py-2 rounded-full text-sm font-medium transition-colors">
+                        <Pencil className="w-4 h-4" />
+                        Modifier
+                      </Link>
+                      <button onClick={() => supprimerAnnonce(annonce.id)} className="flex items-center gap-1.5 border border-red-100 hover:border-red-300 text-red-500 px-3 py-2 rounded-full text-sm font-medium transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                        Supprimer
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

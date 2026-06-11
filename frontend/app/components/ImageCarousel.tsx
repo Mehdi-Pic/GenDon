@@ -35,7 +35,7 @@ export default function ImageCarousel({ images }: { images: string[] }) {
         </div>
       )}
       <div className="mb-8">
-        <div className="relative rounded-2xl overflow-hidden mb-3 bg-gray-50">
+        <div className="relative rounded-3xl overflow-hidden mb-3 bg-gray-50 ring-1 ring-gray-100">
           <img src={images[index]} alt={`Photo ${index + 1}`} onClick={() => setImageAgrandie(images[index])} className="w-full h-80 object-contain bg-gray-50 cursor-pointer" />
           {images.length > 1 && (
             <>

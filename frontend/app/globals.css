@@ -1,9 +1,18 @@
 @import "tailwindcss";
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   font-family: var(--font-inter), sans-serif;
 }
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-sora), sans-serif;
+}
+
+::selection {
+  background: #dcfce7;
+  color: #14532d;
 }

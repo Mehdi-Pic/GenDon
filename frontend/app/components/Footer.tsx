@@ -2,7 +2,7 @@ import Link from "next/link"
 
 export default function Footer() {
   return (
-    <footer className="border-t border-gray-100 mt-16">
+    <footer className="border-t border-gray-100 bg-gray-50/60 mt-16">
       <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
         <p className="text-sm text-gray-400">
           © {new Date().getFullYear()} <span className="font-semibold text-gray-600">Gen<span className="text-green-600">Don</span></span> · Dons gratuits entre habitants de Gennevilliers

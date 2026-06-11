@@ -70,14 +70,14 @@ export default function MesAnnonces() {
         {annonces.length === 0 ? (
           <div className="text-center py-24">
             <p className="text-gray-400 mb-4">Vous n'avez pas encore déposé d'annonce.</p>
-            <Link href="/annonces/new" className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
+            <Link href="/annonces/new" className="bg-green-600 hover:bg-green-500 hover:shadow-lg hover:shadow-green-200 text-white px-6 py-3 rounded-full font-semibold transition-all">
               Déposer un don
             </Link>
           </div>
         ) : (
           <div className="flex flex-col gap-4">
             {annonces.map((annonce) => (
-              <div key={annonce.id} className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl p-4 hover:border-gray-300 transition-colors">
+              <div key={annonce.id} className="flex items-center gap-4 bg-white ring-1 ring-gray-100 rounded-3xl p-4 hover:ring-gray-200 hover:shadow-md transition-all">
                 {annonce.images && annonce.images.length > 0 ? (
                   <img src={vignette(annonce.images[0], 200)} alt={annonce.titre} className="w-20 h-20 object-cover rounded-xl shrink-0" />
                 ) : (
@@ -98,11 +98,11 @@ export default function MesAnnonces() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Link href={`/mes-annonces/${annonce.id}/modifier`} className="flex items-center gap-1.5 border border-gray-200 hover:border-gray-400 text-gray-600 px-3 py-2 rounded-xl text-sm font-medium transition-colors">
+                  <Link href={`/mes-annonces/${annonce.id}/modifier`} className="flex items-center gap-1.5 border border-gray-200 hover:border-gray-400 text-gray-600 px-3 py-2 rounded-full text-sm font-medium transition-colors">
                     <Pencil className="w-4 h-4" />
                     Modifier
                   </Link>
-                  <button onClick={() => supprimerAnnonce(annonce.id)} className="flex items-center gap-1.5 border border-red-100 hover:border-red-300 text-red-500 px-3 py-2 rounded-xl text-sm font-medium transition-colors">
+                  <button onClick={() => supprimerAnnonce(annonce.id)} className="flex items-center gap-1.5 border border-red-100 hover:border-red-300 text-red-500 px-3 py-2 rounded-full text-sm font-medium transition-colors">
                     <Trash2 className="w-4 h-4" />
                     Supprimer
                   </button>

@@ -30,7 +30,7 @@ function SearchBar() {
         onKeyDown={handleKeyDown}
         placeholder="Rechercher un don à Gennevilliers..."
         aria-label="Rechercher un don"
-        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-base text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:bg-white transition-all focus:ring-2 focus:ring-green-100"
+        className="w-full pl-11 pr-4 py-3 bg-gray-100 border border-transparent rounded-full text-base text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:bg-white transition-all focus:ring-2 focus:ring-green-100"
       />
     </div>
   )
@@ -69,12 +69,12 @@ function CategoryNav() {
 
 export default function Header() {
   return (
-    <header className="bg-white border-b border-gray-100 sticky top-0 z-50">
+    <header className="bg-white/80 backdrop-blur-xl border-b border-gray-100 sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-6 py-5 flex items-center gap-6">
         <Link href="/" aria-label="Accueil Gen Don" className="text-3xl font-black tracking-tight text-gray-900 shrink-0">
           Gen<span className="text-green-600">Don</span>
         </Link>
-        <Suspense fallback={<div className="flex-1 h-12 bg-gray-50 rounded-xl border border-gray-200" />}>
+        <Suspense fallback={<div className="flex-1 h-12 bg-gray-100 rounded-full" />}>
           <SearchBar />
         </Suspense>
         <div className="flex items-center gap-3 shrink-0">
@@ -91,7 +91,7 @@ export default function Header() {
             </Link>
             <UserButton />
           </Show>
-          <Link href="/annonces/new" aria-label="Déposer un don" className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl text-base font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-green-300">
+          <Link href="/annonces/new" aria-label="Déposer un don" className="flex items-center gap-2 bg-green-600 hover:bg-green-500 hover:shadow-lg hover:shadow-green-200 text-white px-6 py-3 rounded-full text-base font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-green-300">
             <Plus className="w-5 h-5" aria-hidden="true" />
             Déposer un don
           </Link>

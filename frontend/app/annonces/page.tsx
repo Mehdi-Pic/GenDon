@@ -81,7 +81,7 @@ export default async function Annonces({ searchParams }: { searchParams: Promise
           </div>
           <div className="flex items-center gap-3">
             {(categorie || recherche) && (
-              <Link href="/annonces" className="text-sm text-gray-500 hover:text-gray-900 border border-gray-200 hover:border-gray-400 px-4 py-2 rounded-xl transition-colors">
+              <Link href="/annonces" className="text-sm text-gray-500 hover:text-gray-900 border border-gray-200 hover:border-gray-400 px-4 py-2 rounded-full transition-colors">
                 Voir tout
               </Link>
             )}
@@ -94,7 +94,7 @@ export default async function Annonces({ searchParams }: { searchParams: Promise
         {annonces.length === 0 ? (
           <div className="text-center py-24">
             <p className="text-gray-400 text-lg">Aucun don disponible{recherche ? ` pour "${recherche}"` : categorie ? ` dans la catégorie "${categorie}"` : ""} pour le moment.</p>
-            <Link href="/annonces/new" className="inline-block mt-4 bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
+            <Link href="/annonces/new" className="inline-block mt-4 bg-green-600 hover:bg-green-500 hover:shadow-lg hover:shadow-green-200 text-white px-6 py-3 rounded-full font-semibold transition-all">
               Déposer le premier don
             </Link>
           </div>
@@ -111,7 +111,7 @@ export default async function Annonces({ searchParams }: { searchParams: Promise
                 <Link
                   href={page > 1 ? urlPage(sp, page - 1) : "#"}
                   aria-disabled={page === 1}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${page === 1 ? "border-gray-100 text-gray-300 pointer-events-none" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}
+                  className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${page === 1 ? "border-gray-100 text-gray-300 pointer-events-none" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}
                 >
                   ←
                 </Link>
@@ -122,7 +122,7 @@ export default async function Annonces({ searchParams }: { searchParams: Promise
                     <Link
                       key={p}
                       href={urlPage(sp, p)}
-                      className={`w-10 h-10 flex items-center justify-center rounded-xl text-sm font-medium border transition-colors ${p === page ? "bg-gray-900 text-white border-gray-900" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}
+                      className={`w-10 h-10 flex items-center justify-center rounded-full text-sm font-medium border transition-colors ${p === page ? "bg-gray-900 text-white border-gray-900" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}
                     >
                       {p}
                     </Link>
@@ -131,7 +131,7 @@ export default async function Annonces({ searchParams }: { searchParams: Promise
                 <Link
                   href={page < pages ? urlPage(sp, page + 1) : "#"}
                   aria-disabled={page === pages}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${page === pages ? "border-gray-100 text-gray-300 pointer-events-none" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}
+                  className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${page === pages ? "border-gray-100 text-gray-300 pointer-events-none" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}
                 >
                   →
                 </Link>

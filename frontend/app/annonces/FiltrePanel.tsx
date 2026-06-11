@@ -62,7 +62,7 @@ export default function FiltrePanel() {
     <div className="relative">
       <button
         onClick={() => setOuvert((v) => !v)}
-        className={`flex items-center gap-2 border px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+        className={`flex items-center gap-2 border px-4 py-2 rounded-full text-sm font-medium transition-colors ${
           nbActifs > 0
             ? "border-green-500 bg-green-50 text-green-700"
             : "border-gray-200 text-gray-600 hover:border-gray-400"
@@ -80,7 +80,7 @@ export default function FiltrePanel() {
       {ouvert && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOuvert(false)} />
-          <div className="absolute right-0 top-full mt-2 z-20 bg-white border border-gray-100 rounded-2xl shadow-xl p-5 w-72 flex flex-col gap-5">
+          <div className="absolute right-0 top-full mt-2 z-20 bg-white ring-1 ring-gray-100 rounded-3xl shadow-2xl p-5 w-72 flex flex-col gap-5">
 
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Trier par</p>
@@ -167,7 +167,7 @@ export default function FiltrePanel() {
               )}
               <button
                 onClick={appliquer}
-                className="flex-1 bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                className="flex-1 bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-full text-sm font-semibold transition-colors"
               >
                 Appliquer
               </button>

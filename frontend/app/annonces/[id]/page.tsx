@@ -31,13 +31,13 @@ export default async function AnnonceDetail({ params }: { params: Promise<{ id: 
         </div>
         <h1 className="text-3xl font-black text-gray-900 mb-4 leading-tight">{annonce.titre}</h1>
         <p className="text-gray-600 leading-relaxed mb-8 text-base">{annonce.description}</p>
-        <div className="flex items-center gap-6 py-5 border-t border-b border-gray-100 mb-8">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <MapPin className="w-4 h-4 text-gray-400" aria-hidden="true" />
+        <div className="flex flex-wrap items-center gap-3 mb-8">
+          <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-full px-4 py-2">
+            <MapPin className="w-4 h-4 text-green-600" aria-hidden="true" />
             {annonce.quartier}
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <User className="w-4 h-4 text-gray-400" aria-hidden="true" />
+          <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-full px-4 py-2">
+            <User className="w-4 h-4 text-green-600" aria-hidden="true" />
             @{annonce.pseudo}
           </div>
         </div>

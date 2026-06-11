@@ -4,7 +4,7 @@ import { vignette, type Annonce } from "../lib/annonces"
 
 export default function AnnonceCard({ annonce }: { annonce: Annonce }) {
   return (
-    <Link href={`/annonces/${annonce.id}`} aria-label={`Voir l'annonce : ${annonce.titre}`} className="group block bg-white rounded-2xl overflow-hidden border border-gray-100 hover:border-gray-300 hover:shadow-lg transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-300">
+    <Link href={`/annonces/${annonce.id}`} aria-label={`Voir l'annonce : ${annonce.titre}`} className="group block bg-white rounded-3xl overflow-hidden ring-1 ring-gray-100 hover:ring-gray-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-300">
       <div className="relative overflow-hidden">
         {annonce.images && annonce.images.length > 0 ? (
           <img src={vignette(annonce.images[0])} alt={`Photo de ${annonce.titre}`} loading="lazy" className="w-full h-52 object-cover group-hover:scale-105 transition-transform duration-300" />

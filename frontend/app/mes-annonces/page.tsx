@@ -77,7 +77,7 @@ export default function MesAnnonces() {
         ) : (
           <div className="flex flex-col gap-4">
             {annonces.map((annonce) => (
-              <div key={annonce.id} className="flex items-center gap-4 bg-white ring-1 ring-gray-100 rounded-3xl p-4 hover:ring-gray-200 hover:shadow-md transition-all">
+              <div key={annonce.id} className="flex flex-wrap items-center gap-4 bg-white ring-1 ring-gray-100 rounded-3xl p-4 hover:ring-gray-200 hover:shadow-md transition-all">
                 {annonce.images && annonce.images.length > 0 ? (
                   <img src={vignette(annonce.images[0], 200)} alt={annonce.titre} className="w-20 h-20 object-cover rounded-xl shrink-0" />
                 ) : (
@@ -97,7 +97,7 @@ export default function MesAnnonces() {
                     <span className="text-xs text-gray-400">{new Date(annonce.created_at).toLocaleDateString("fr-FR")}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 ml-auto">
                   <Link href={`/mes-annonces/${annonce.id}/modifier`} className="flex items-center gap-1.5 border border-gray-200 hover:border-gray-400 text-gray-600 px-3 py-2 rounded-full text-sm font-medium transition-colors">
                     <Pencil className="w-4 h-4" />
                     Modifier

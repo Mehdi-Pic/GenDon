@@ -16,3 +16,11 @@ h1, h2, h3, h4, h5, h6 {
   background: #dcfce7;
   color: #14532d;
 }
+
+/* Scroll horizontal sans barre visible (nav catégories mobile) */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

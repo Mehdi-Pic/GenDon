@@ -21,7 +21,7 @@ function SearchBar() {
   }
 
   return (
-    <div className="flex-1 relative">
+    <div className="relative w-full">
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" aria-hidden="true" />
       <input
         type="text"
@@ -41,9 +41,9 @@ function CategoryNav() {
   const activeCat = searchParams.get("categorie")
 
   return (
-    <ul className="flex items-center justify-center gap-0 overflow-x-hidden">
+    <ul className="flex items-center justify-start lg:justify-center gap-0 overflow-x-auto no-scrollbar">
       <li className="relative group flex items-center shrink-0">
-        <Link href="/annonces" className={`block px-5 py-4 text-lg transition-colors whitespace-nowrap font-medium ${!activeCat ? "text-gray-900" : "text-gray-500 hover:text-gray-900"}`}>
+        <Link href="/annonces" className={`block px-3 sm:px-5 py-3 sm:py-4 text-base sm:text-lg transition-colors whitespace-nowrap font-medium ${!activeCat ? "text-gray-900" : "text-gray-500 hover:text-gray-900"}`}>
           Tout
         </Link>
         <span className="text-gray-200 text-xs" aria-hidden="true">·</span>
@@ -53,7 +53,7 @@ function CategoryNav() {
         const isActive = activeCat === cat
         return (
           <li key={cat} className="relative group flex items-center shrink-0">
-            <Link href={`/annonces?categorie=${encodeURIComponent(cat)}`} className={`block px-5 py-4 text-lg transition-colors whitespace-nowrap font-medium ${isActive ? "text-gray-900" : "text-gray-500 hover:text-gray-900"}`}>
+            <Link href={`/annonces?categorie=${encodeURIComponent(cat)}`} className={`block px-3 sm:px-5 py-3 sm:py-4 text-base sm:text-lg transition-colors whitespace-nowrap font-medium ${isActive ? "text-gray-900" : "text-gray-500 hover:text-gray-900"}`}>
               {cat}
             </Link>
             {index < categories.length - 1 && (
@@ -70,14 +70,16 @@ function CategoryNav() {
 export default function Header() {
   return (
     <header className="bg-white/80 backdrop-blur-xl border-b border-gray-100 sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-6 py-5 flex items-center gap-6">
-        <Link href="/" aria-label="Accueil Gen Don" className="text-3xl font-black tracking-tight text-gray-900 shrink-0">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center gap-3 sm:gap-6">
+        <Link href="/" aria-label="Accueil Gen Don" className="text-2xl sm:text-3xl font-black tracking-tight text-gray-900 shrink-0">
           Gen<span className="text-green-600">Don</span>
         </Link>
-        <Suspense fallback={<div className="flex-1 h-12 bg-gray-100 rounded-full" />}>
-          <SearchBar />
-        </Suspense>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="order-3 w-full sm:order-0 sm:w-auto sm:flex-1">
+          <Suspense fallback={<div className="h-12 bg-gray-100 rounded-full w-full" />}>
+            <SearchBar />
+          </Suspense>
+        </div>
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
           <Show when="signed-out">
             <SignInButton mode="modal">
               <button className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
@@ -91,13 +93,13 @@ export default function Header() {
             </Link>
             <UserButton />
           </Show>
-          <Link href="/annonces/new" aria-label="Déposer un don" className="flex items-center gap-2 bg-green-600 hover:bg-green-500 hover:shadow-lg hover:shadow-green-200 text-white px-6 py-3 rounded-full text-base font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-green-300">
+          <Link href="/annonces/new" aria-label="Déposer un don" className="flex items-center gap-2 bg-green-600 hover:bg-green-500 hover:shadow-lg hover:shadow-green-200 text-white px-3.5 sm:px-6 py-3 rounded-full text-base font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-green-300">
             <Plus className="w-5 h-5" aria-hidden="true" />
-            Déposer un don
+            <span className="hidden sm:inline">Déposer un don</span>
           </Link>
         </div>
       </div>
-      <div className="px-6">
+      <div className="px-2 sm:px-6">
         <Suspense fallback={<div className="h-12" />}>
           <CategoryNav />
         </Suspense>

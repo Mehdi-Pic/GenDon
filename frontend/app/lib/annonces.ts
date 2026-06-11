@@ -18,6 +18,8 @@ export type Annonce = {
   images: string[]
   created_at: string
   est_proprietaire?: boolean
+  est_favori?: boolean
+  vues?: number
 }
 
 // Version réduite d'une image Cloudinary pour les listes (vignettes).

@@ -62,6 +62,8 @@ class AnnonceResponse(BaseModel):
     statut: str
     created_at: datetime
     est_proprietaire: bool = False
+    est_favori: bool = False
+    vues: int = 0
 
     class Config:
         from_attributes = True

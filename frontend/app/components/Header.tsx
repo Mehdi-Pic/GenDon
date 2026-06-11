@@ -88,8 +88,8 @@ export default function Header() {
             </SignInButton>
           </Show>
           <Show when="signed-in">
-            <Link href="/mes-annonces" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
-              Mes annonces
+            <Link href="/profil" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+              Mon profil
             </Link>
             <UserButton />
           </Show>

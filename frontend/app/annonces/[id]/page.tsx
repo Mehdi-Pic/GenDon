@@ -36,6 +36,12 @@ export default async function AnnonceDetail({ params }: { params: Promise<{ id: 
         <div className="flex items-center gap-3 mb-4">
           <span className="bg-gray-100 text-gray-700 text-xs font-semibold px-3 py-1.5 rounded-full">{annonce.categorie}</span>
           <span className="text-xs text-gray-400">{new Date(annonce.created_at).toLocaleDateString("fr-FR")}</span>
+          <div className="ml-auto flex items-center gap-2">
+            {!annonce.est_proprietaire && (
+              <FavoriButton annonceId={annonce.id} initial={annonce.est_favori ?? false} />
+            )}
+            <ShareButton titre={annonce.titre} />
+          </div>
         </div>
         <h1 className="text-3xl font-black text-gray-900 mb-4 leading-tight">{annonce.titre}</h1>
         <p className="text-gray-600 leading-relaxed mb-8 text-base">{annonce.description}</p>
@@ -51,12 +57,6 @@ export default async function AnnonceDetail({ params }: { params: Promise<{ id: 
           <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-full px-4 py-2">
             <Eye className="w-4 h-4 text-green-600" aria-hidden="true" />
             {annonce.vues ?? 0} vue{(annonce.vues ?? 0) > 1 ? "s" : ""}
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            {!annonce.est_proprietaire && (
-              <FavoriButton annonceId={annonce.id} initial={annonce.est_favori ?? false} />
-            )}
-            <ShareButton titre={annonce.titre} />
           </div>
         </div>
         {annonce.est_proprietaire ? (

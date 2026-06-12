@@ -1,6 +1,4 @@
 # GenDon
-Site de donation pour la ville de Gennevilliers
-
 Partie Backend hebergé sur **Railway** (PostgreSQL + Python)
 
 Partie Frontend hebergé sur **Vercel**
@@ -14,3 +12,5 @@ Système de mails : **Resend**
 Nom de domaine et DNS : **OVH**
 
 Indexation Google : **Google Search Console**
+
+Projet d'apprentissage de développement web technique avec Frontend + Backend + Services externes, associé à Claude comme pédagogue

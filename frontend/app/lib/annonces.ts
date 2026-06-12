@@ -1,11 +1,11 @@
 export const CATEGORIES = [
-  "Immobilier", "Vêtements", "Maison & Jardin",
+  "Mobilier", "Vêtements", "Maison & Jardin",
   "Électronique", "Loisirs", "Sport", "Autres",
 ]
 
 export const QUARTIERS = [
   "Les Grésillons", "Les Chevrins", "Les Agnettes", "Le Village",
-  "Le Luth", "Le Fossé de l'Aumône", "Chandon - Brénu - Sévines",
+  "Le Luth", "Le Fossé de l'Aumône", "Chandon - Brénu - Sévines","République","Cité Jardin",
 ]
 
 export type Annonce = {

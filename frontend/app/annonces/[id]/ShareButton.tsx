@@ -12,7 +12,7 @@ export default function ShareButton({ titre }: { titre: string }) {
     setNatifDispo(typeof navigator !== "undefined" && !!navigator.share)
   }, [])
 
-  const texte = `${titre} — à donner gratuitement sur GenDon`
+  const texte = `${titre}, à donner gratuitement sur GenDon`
 
   async function copierLien() {
     try {

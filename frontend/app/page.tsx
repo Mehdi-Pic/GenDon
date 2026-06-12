@@ -20,7 +20,7 @@ export default function Home() {
             <span className="text-green-400">près de chez vous.</span>
           </h1>
           <p className="text-lg text-white/90 max-w-xl mx-auto mb-10 leading-relaxed drop-shadow">
-            La plateforme de dons entre habitants de Gennevilliers. Zéro argent, zéro transaction — juste du lien local.
+            La plateforme de dons entre habitants de Gennevilliers. Zéro argent, zéro transaction, juste du lien local.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
             <Link href="/annonces" className="group flex items-center gap-2 bg-white text-gray-900 hover:bg-gray-100 px-7 py-3.5 rounded-full font-semibold transition-all hover:shadow-xl">

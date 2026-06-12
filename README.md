@@ -28,4 +28,3 @@ Projet d'apprentissage de développement web technique avec Frontend + Backend +
 - Modération / Administration (Pouvoir supprimer des annonces ou comptes suspects)
 - Sentry ou autre pour un suivi d'erreurs
 - Problème Mac ?
-- 

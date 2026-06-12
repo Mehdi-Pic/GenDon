@@ -22,7 +22,7 @@ const sora = Sora({
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.gendon.fr"),
   title: {
-    default: "GenDon — Dons gratuits entre habitants de Gennevilliers",
+    default: "GenDon · Dons gratuits entre habitants de Gennevilliers",
     template: "%s · GenDon",
   },
   description: "Donnez une seconde vie à vos objets à Gennevilliers. Plateforme de dons 100% gratuite et locale entre habitants.",

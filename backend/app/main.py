@@ -171,7 +171,7 @@ def envoyer_rappels_expiration():
                         "html": f"""
                         <div style="font-family:sans-serif;max-width:560px;margin:auto;color:#111">
                           <p style="font-size:18px;font-weight:700;margin-bottom:4px">Votre annonce expire bientôt</p>
-                          <p style="color:#6b7280;margin-top:0">via <strong>GenDon</strong> — Gennevilliers</p>
+                          <p style="color:#6b7280;margin-top:0">via <strong>GenDon</strong> · Gennevilliers</p>
                           <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
                           <p>Votre annonce :</p>
                           <p style="background:#f9fafb;border-left:3px solid #16a34a;padding:12px 16px;border-radius:4px;font-weight:600">{escape(annonce.titre)}</p>
@@ -480,7 +480,7 @@ async def contacter_donneur(
         "html": f"""
         <div style="font-family:sans-serif;max-width:560px;margin:auto;color:#111">
           <p style="font-size:18px;font-weight:700;margin-bottom:4px">Quelqu'un veut votre don !</p>
-          <p style="color:#6b7280;margin-top:0">via <strong>GenDon</strong> — Gennevilliers</p>
+          <p style="color:#6b7280;margin-top:0">via <strong>GenDon</strong> · Gennevilliers</p>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
           <p><strong>{escape(requester_name)}</strong> est intéressé(e) par votre annonce :</p>
           <p style="background:#f9fafb;border-left:3px solid #16a34a;padding:12px 16px;border-radius:4px;font-weight:600">{escape(annonce.titre)}</p>

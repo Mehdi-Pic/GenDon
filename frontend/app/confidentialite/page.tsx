@@ -16,7 +16,7 @@ export default function Confidentialite() {
           <h2 className="text-xl font-bold text-gray-900 mb-3">Responsable du traitement</h2>
           <p className="text-gray-600 leading-relaxed">
             Le responsable du traitement des données collectées sur <strong>gendon.fr</strong> est
-            l&apos;éditeur du site : Mehdi Pichard —{" "}
+            l&apos;éditeur du site : Mehdi Pichard,{" "}
             <a href="mailto:pichardmehdi@gmail.com" className="text-green-600 hover:underline">pichardmehdi@gmail.com</a>.
           </p>
         </section>
@@ -55,10 +55,10 @@ export default function Confidentialite() {
         <section className="mb-8">
           <h2 className="text-xl font-bold text-gray-900 mb-3">Sous-traitants</h2>
           <ul className="list-disc pl-5 text-gray-600 leading-relaxed flex flex-col gap-2">
-            <li><strong>Clerk Inc.</strong> (États-Unis) — authentification et gestion des comptes.</li>
-            <li><strong>Cloudinary Ltd.</strong> — hébergement des photos d&apos;annonces.</li>
-            <li><strong>Resend Inc.</strong> (États-Unis) — envoi des emails de mise en relation.</li>
-            <li><strong>Vercel Inc.</strong> et <strong>Railway Corp.</strong> (États-Unis) — hébergement du site et de la base de données.</li>
+            <li><strong>Clerk Inc.</strong> (États-Unis) : authentification et gestion des comptes.</li>
+            <li><strong>Cloudinary Ltd.</strong> : hébergement des photos d&apos;annonces.</li>
+            <li><strong>Resend Inc.</strong> (États-Unis) : envoi des emails de mise en relation.</li>
+            <li><strong>Vercel Inc.</strong> et <strong>Railway Corp.</strong> (États-Unis) : hébergement du site et de la base de données.</li>
           </ul>
           <p className="text-gray-600 leading-relaxed mt-3">
             Ces prestataires peuvent être situés hors de l&apos;Union européenne ; ils s&apos;appuient sur

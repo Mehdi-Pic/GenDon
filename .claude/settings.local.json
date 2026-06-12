@@ -12,7 +12,9 @@
       "Bash(git push *)",
       "Bash(git rm *)",
       "Bash(npx tsc *)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(findstr /i \"tailwind next react\")",
+      "Bash(python -m py_compile app/main.py app/models.py app/schemas.py)"
     ]
   }
 }

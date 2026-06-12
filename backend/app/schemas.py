@@ -10,6 +10,7 @@ CATEGORIES = [
 QUARTIERS = [
     "Les Grésillons", "Les Chevrins", "Les Agnettes", "Le Village",
     "Le Luth", "Le Fossé de l'Aumône", "Chandon - Brénu - Sévines",
+    "République", "Cité Jardin",
 ]
 
 

@@ -1,30 +1,81 @@
 # GenDon
 
-## Ce qui est établi :
+**Plateforme de dons gratuits entre habitants de Gennevilliers (92).**
+Un site local où chacun peut déposer un objet dont il n'a plus besoin et le donner à un voisin, sans argent ni transaction.
 
-Stack Front : **TypeScript, Next.js (React), Tailwind CSS**
+🔗 **En production : [gendon.fr](https://www.gendon.fr)**
 
-Stack Back : **Python, FastAPI, PostgreSQL**
+---
 
-Partie Backend hebergée sur **Railway** (PostgreSQL + Python)
+## À propos
 
-Partie Frontend hebergée sur **Vercel**
+GenDon est une application web full-stack développée et déployée de bout en bout.
+Objectif : faciliter le réemploi local à l'échelle d'une ville, dans l'esprit d'un "Leboncoin du don" hyper-local.
 
-Gestion des comptes : **Clerk**
+Projet d'apprentissage du développement web (Frontend + Backend + services externes), conçu avec l'accompagnement de Claude comme pédagogue.
 
-Stockage des images : **Cloudinary**
+## Stack technique
 
-Système de mails : **Resend**
+**Frontend** — TypeScript, Next.js (App Router, React), Tailwind CSS · hébergé sur **Vercel**
+**Backend** — Python, FastAPI, SQLAlchemy · hébergé sur **Railway**
+**Base de données** — PostgreSQL
 
-Nom de domaine et DNS : **OVH**
+**Services externes**
+- **Clerk** — authentification et gestion des comptes
+- **Cloudinary** — stockage et optimisation des images
+- **Resend** — emails transactionnels (mise en relation, rappels)
+- **OVH** — nom de domaine et DNS
+- **Google Search Console** — indexation
 
-Indexation Google : **Google Search Console**
+## Fonctionnalités
 
-Projet d'apprentissage de développement web technique avec Frontend + Backend + Services externes, associé à Claude comme pédagogue
+- 🔐 Inscription / connexion (Clerk)
+- 📝 Dépôt d'une annonce avec jusqu'à 5 photos (compression côté navigateur + upload Cloudinary)
+- 🔎 Listing paginé avec filtres (catégorie, quartier, recherche, tri, période) et recherche texte
+- ❤️ Favoris et compteur de vues par annonce
+- ✉️ Mise en relation avec le donneur par email (sans exposer les adresses)
+- 👤 Espace profil : mes annonces et mes favoris
+- 🗑️ Expiration automatique des annonces après 30 jours (+ email de rappel à J-3)
+- 📱 Interface responsive, optimisée mobile
+- 🔍 SEO : sitemap dynamique, métadonnées Open Graph (aperçus riches au partage)
 
-## Restant à faire : 
+## Architecture
 
-- Bouton "Signaler" pour la modération pour une annonce inquiétante
-- Modération / Administration (Pouvoir supprimer des annonces ou comptes suspects)
-- Sentry ou autre pour un suivi d'erreurs
-- Problème Mac ?
+Frontend et backend sont **séparés** et communiquent via une API REST :
+
+```
+Navigateur ─▶ Next.js (Vercel) ─▶ API FastAPI (Railway) ─▶ PostgreSQL
+                                   │
+                                   ├─ Clerk      (auth, vérification JWT)
+                                   ├─ Cloudinary (images)
+                                   └─ Resend     (emails)
+```
+
+L'authentification repose sur la **vérification des tokens JWT de Clerk côté serveur** (JWKS / RS256). Les endpoints publics utilisent une authentification optionnelle qui permet de calculer côté serveur les informations propres à l'utilisateur (ses annonces, ses favoris) sans qu'elles soient falsifiables par le client.
+
+## Lancer le projet en local
+
+**Backend**
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate        # Windows  (source venv/bin/activate sur macOS/Linux)
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+**Frontend**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Chaque partie attend ses propres variables d'environnement (base de données, clés Clerk / Cloudinary / Resend). Voir `os.getenv(...)` dans `backend/app` et `process.env` côté frontend pour la liste.
+
+## Pistes d'amélioration
+
+- Bouton "Signaler" et interface de modération
+- Suppression de compte en self-service (RGPD)
+- Suivi d'erreurs (Sentry)
+- Tests automatisés (pytest / CI)

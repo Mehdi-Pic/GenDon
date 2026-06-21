@@ -16,9 +16,9 @@ Projet d'apprentissage du développement web (Frontend + Backend + services exte
 
 ## Stack technique
 
-**Frontend** — TypeScript, Next.js (App Router, React), Tailwind CSS · hébergé sur **Vercel**
-**Backend** — Python, FastAPI, SQLAlchemy · hébergé sur **Railway**
-**Base de données** — PostgreSQL
+- **Frontend** — TypeScript, Next.js (App Router, React), Tailwind CSS · hébergé sur **Vercel**
+- **Backend** — Python, FastAPI, SQLAlchemy · hébergé sur **Railway**
+- **Base de données** — PostgreSQL
 
 **Services externes**
 - **Clerk** — authentification et gestion des comptes
@@ -52,26 +52,6 @@ Navigateur ─▶ Next.js (Vercel) ─▶ API FastAPI (Railway) ─▶ PostgreSQ
 ```
 
 L'authentification repose sur la **vérification des tokens JWT de Clerk côté serveur** (JWKS / RS256). Les endpoints publics utilisent une authentification optionnelle qui permet de calculer côté serveur les informations propres à l'utilisateur (ses annonces, ses favoris) sans qu'elles soient falsifiables par le client.
-
-## Lancer le projet en local
-
-**Backend**
-```bash
-cd backend
-python -m venv venv
-venv\Scripts\activate        # Windows  (source venv/bin/activate sur macOS/Linux)
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-**Frontend**
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Chaque partie attend ses propres variables d'environnement (base de données, clés Clerk / Cloudinary / Resend). Voir `os.getenv(...)` dans `backend/app` et `process.env` côté frontend pour la liste.
 
 ## Pistes d'amélioration
 

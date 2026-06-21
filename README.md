@@ -16,16 +16,16 @@ Projet d'apprentissage du développement web (Frontend + Backend + services exte
 
 ## Stack technique
 
-- **Frontend** — TypeScript, Next.js (App Router, React), Tailwind CSS · hébergé sur **Vercel**
-- **Backend** — Python, FastAPI, SQLAlchemy · hébergé sur **Railway**
-- **Base de données** — PostgreSQL
+- **Frontend** : TypeScript, Next.js (App Router, React), Tailwind CSS · hébergé sur **Vercel**
+- **Backend** : Python, FastAPI, SQLAlchemy · hébergé sur **Railway**
+- **Base de données** : PostgreSQL
 
 **Services externes**
-- **Clerk** — authentification et gestion des comptes
-- **Cloudinary** — stockage et optimisation des images
-- **Resend** — emails transactionnels (mise en relation, rappels)
-- **OVH** — nom de domaine et DNS
-- **Google Search Console** — indexation
+- **Clerk** : authentification et gestion des comptes
+- **Cloudinary** : stockage et optimisation des images
+- **Resend** : emails transactionnels (mise en relation, rappels)
+- **OVH** : nom de domaine et DNS
+- **Google Search Console** : indexation
 
 ## Fonctionnalités
 

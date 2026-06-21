@@ -59,3 +59,4 @@ L'authentification repose sur la **vérification des tokens JWT de Clerk côté 
 - Suppression de compte en self-service (RGPD)
 - Suivi d'erreurs (Sentry)
 - Tests automatisés (pytest / CI)
+- Compatibilité Mac

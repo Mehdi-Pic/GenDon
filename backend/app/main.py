@@ -1,3 +1,4 @@
+# API Gen Don (déploiement Railway)
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session

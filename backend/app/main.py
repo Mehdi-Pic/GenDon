@@ -454,8 +454,13 @@ def signaler_annonce(
 # La sécurité est entièrement côté serveur : identité prouvée par le JWT Clerk,
 # rôle lu en base (+ ADMIN_USER_ID en variable d'environnement pour l'admin principal).
 
+def _admins_principaux() -> list:
+    """IDs admin définis sur Railway (ADMIN_USER_ID), séparés par des virgules."""
+    return [a.strip() for a in os.getenv("ADMIN_USER_ID", "").split(",") if a.strip()]
+
+
 def _role_utilisateur(db: Session, user_id: str):
-    if user_id and user_id == os.getenv("ADMIN_USER_ID"):
+    if user_id and user_id in _admins_principaux():
         return "admin"
     ligne = db.query(models.Role).filter(models.Role.clerk_user_id == user_id).first()
     return ligne.role if ligne else None
@@ -553,7 +558,7 @@ async def admin_lister_utilisateurs(
         .all()
     )
     roles = {r.clerk_user_id: r.role for r in db.query(models.Role).all()}
-    admin_principal = os.getenv("ADMIN_USER_ID")
+    admins = _admins_principaux()
     utilisateurs = []
     for u in res.json():
         uid = u["id"]
@@ -564,8 +569,8 @@ async def admin_lister_utilisateurs(
             "image": u.get("image_url"),
             "created_at": u.get("created_at"),
             "nb_annonces": comptes.get(uid, 0),
-            "role": "admin" if uid == admin_principal else roles.get(uid),
-            "est_admin_principal": uid == admin_principal,
+            "role": "admin" if uid in admins else roles.get(uid),
+            "est_admin_principal": uid in admins,
         })
     return utilisateurs
 
@@ -581,8 +586,8 @@ def admin_changer_role(
     db: Session = Depends(get_db),
     acteur: dict = Depends(exiger_admin),
 ):
-    if uid == os.getenv("ADMIN_USER_ID"):
-        raise HTTPException(status_code=400, detail="Le rôle de l'administrateur principal ne peut pas être modifié")
+    if uid in _admins_principaux():
+        raise HTTPException(status_code=400, detail="Le rôle d'un administrateur principal ne peut pas être modifié")
     ligne = db.query(models.Role).filter(models.Role.clerk_user_id == uid).first()
     if data.role == "aucun":
         if ligne:

@@ -422,6 +422,239 @@ def mes_favoris(
     return annonces
 
 
+# ---------- Signalements (public, authentifié) ----------
+
+class SignalementCreate(PydanticBase):
+    raison: str = Field(min_length=3, max_length=500)
+
+
+@app.post("/annonces/{annonce_id}/signaler")
+def signaler_annonce(
+    annonce_id: int,
+    data: SignalementCreate,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    verifier_rate_limit(user_id, "signalement", maximum=5, fenetre_secondes=3600)
+    annonce = db.query(models.Annonce).filter(models.Annonce.id == annonce_id).first()
+    if not annonce:
+        raise HTTPException(status_code=404, detail="Annonce introuvable")
+    existe = (
+        db.query(models.Signalement)
+        .filter(models.Signalement.clerk_user_id == user_id, models.Signalement.annonce_id == annonce_id)
+        .first()
+    )
+    if not existe:
+        db.add(models.Signalement(annonce_id=annonce_id, clerk_user_id=user_id, raison=data.raison.strip()))
+        db.commit()
+    return {"message": "Signalement enregistré"}
+
+
+# ---------- Administration ----------
+# La sécurité est entièrement côté serveur : identité prouvée par le JWT Clerk,
+# rôle lu en base (+ ADMIN_USER_ID en variable d'environnement pour l'admin principal).
+
+def _role_utilisateur(db: Session, user_id: str):
+    if user_id and user_id == os.getenv("ADMIN_USER_ID"):
+        return "admin"
+    ligne = db.query(models.Role).filter(models.Role.clerk_user_id == user_id).first()
+    return ligne.role if ligne else None
+
+
+def exiger_moderateur(
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+) -> dict:
+    role = _role_utilisateur(db, user_id)
+    if role not in ("admin", "moderateur"):
+        raise HTTPException(status_code=403, detail="Accès réservé")
+    return {"user_id": user_id, "role": role}
+
+
+def exiger_admin(acteur: dict = Depends(exiger_moderateur)) -> dict:
+    if acteur["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs")
+    return acteur
+
+
+def journaliser(db: Session, user_id: str, action: str, details: str = ""):
+    db.add(models.ActionModeration(clerk_user_id=user_id, action=action, details=details))
+    db.commit()
+
+
+@app.get("/admin/moi")
+def admin_moi(acteur: dict = Depends(exiger_moderateur)):
+    return {"role": acteur["role"]}
+
+
+@app.get("/admin/stats")
+def admin_stats(db: Session = Depends(get_db), acteur: dict = Depends(exiger_moderateur)):
+    il_y_a_7_jours = datetime.now(timezone.utc) - timedelta(days=7)
+    return {
+        "annonces": db.query(models.Annonce).count(),
+        "annonces_semaine": db.query(models.Annonce).filter(models.Annonce.created_at >= il_y_a_7_jours).count(),
+        "vues_totales": db.query(func.coalesce(func.sum(models.Annonce.vues), 0)).scalar(),
+        "favoris": db.query(models.Favori).count(),
+        "signalements_en_attente": db.query(models.Signalement).filter(models.Signalement.traite == False).count(),
+    }
+
+
+@app.get("/admin/annonces", response_model=schemas.AnnoncesPaginées)
+def admin_lister_annonces(
+    recherche: str = None,
+    page: int = 1,
+    db: Session = Depends(get_db),
+    acteur: dict = Depends(exiger_moderateur),
+):
+    page = max(1, page)
+    query = db.query(models.Annonce)
+    if recherche:
+        terme = f"%{recherche}%"
+        query = query.filter(
+            models.Annonce.titre.ilike(terme)
+            | models.Annonce.description.ilike(terme)
+            | models.Annonce.pseudo.ilike(terme)
+        )
+    query = query.order_by(models.Annonce.created_at.desc())
+    total = query.count()
+    annonces = query.offset((page - 1) * LIMITE_PAR_PAGE).limit(LIMITE_PAR_PAGE).all()
+    return {"annonces": annonces, "total": total, "pages": ceil(total / LIMITE_PAR_PAGE) if total > 0 else 1, "page": page}
+
+
+@app.delete("/admin/annonces/{annonce_id}")
+def admin_supprimer_annonce(
+    annonce_id: int,
+    db: Session = Depends(get_db),
+    acteur: dict = Depends(exiger_moderateur),
+):
+    annonce = db.query(models.Annonce).filter(models.Annonce.id == annonce_id).first()
+    if not annonce:
+        raise HTTPException(status_code=404, detail="Annonce introuvable")
+    journaliser(db, acteur["user_id"], "suppression_annonce", f"#{annonce_id} « {annonce.titre} » de {annonce.pseudo}")
+    supprimer_images_cloudinary(annonce.images or [])
+    db.delete(annonce)
+    db.commit()
+    return {"message": "Annonce supprimée"}
+
+
+@app.get("/admin/utilisateurs")
+async def admin_lister_utilisateurs(
+    db: Session = Depends(get_db),
+    acteur: dict = Depends(exiger_moderateur),
+):
+    headers_clerk = {"Authorization": f"Bearer {os.getenv('CLERK_SECRET_KEY')}"}
+    async with httpx.AsyncClient(timeout=10) as client:
+        res = await client.get("https://api.clerk.com/v1/users?limit=100&order_by=-created_at", headers=headers_clerk)
+    if not res.is_success:
+        raise HTTPException(status_code=502, detail="Impossible de récupérer les utilisateurs")
+    comptes = dict(
+        db.query(models.Annonce.clerk_user_id, func.count(models.Annonce.id))
+        .group_by(models.Annonce.clerk_user_id)
+        .all()
+    )
+    roles = {r.clerk_user_id: r.role for r in db.query(models.Role).all()}
+    admin_principal = os.getenv("ADMIN_USER_ID")
+    utilisateurs = []
+    for u in res.json():
+        uid = u["id"]
+        utilisateurs.append({
+            "id": uid,
+            "pseudo": u.get("username") or u.get("first_name") or "(sans pseudo)",
+            "email": _email_principal(u),
+            "image": u.get("image_url"),
+            "created_at": u.get("created_at"),
+            "nb_annonces": comptes.get(uid, 0),
+            "role": "admin" if uid == admin_principal else roles.get(uid),
+            "est_admin_principal": uid == admin_principal,
+        })
+    return utilisateurs
+
+
+class RoleUpdate(PydanticBase):
+    role: str = Field(pattern="^(moderateur|aucun)$")
+
+
+@app.post("/admin/utilisateurs/{uid}/role")
+def admin_changer_role(
+    uid: str,
+    data: RoleUpdate,
+    db: Session = Depends(get_db),
+    acteur: dict = Depends(exiger_admin),
+):
+    if uid == os.getenv("ADMIN_USER_ID"):
+        raise HTTPException(status_code=400, detail="Le rôle de l'administrateur principal ne peut pas être modifié")
+    ligne = db.query(models.Role).filter(models.Role.clerk_user_id == uid).first()
+    if data.role == "aucun":
+        if ligne:
+            db.delete(ligne)
+            db.commit()
+    else:
+        if ligne:
+            ligne.role = data.role
+        else:
+            db.add(models.Role(clerk_user_id=uid, role=data.role))
+        db.commit()
+    journaliser(db, acteur["user_id"], "changement_role", f"{uid} → {data.role}")
+    return {"role": None if data.role == "aucun" else data.role}
+
+
+@app.get("/admin/signalements")
+def admin_lister_signalements(
+    db: Session = Depends(get_db),
+    acteur: dict = Depends(exiger_moderateur),
+):
+    lignes = (
+        db.query(models.Signalement, models.Annonce.titre)
+        .outerjoin(models.Annonce, models.Annonce.id == models.Signalement.annonce_id)
+        .order_by(models.Signalement.traite.asc(), models.Signalement.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    return [
+        {
+            "id": s.id,
+            "annonce_id": s.annonce_id,
+            "annonce_titre": titre,
+            "raison": s.raison,
+            "traite": s.traite,
+            "created_at": s.created_at,
+        }
+        for s, titre in lignes
+    ]
+
+
+@app.patch("/admin/signalements/{signalement_id}/traiter")
+def admin_traiter_signalement(
+    signalement_id: int,
+    db: Session = Depends(get_db),
+    acteur: dict = Depends(exiger_moderateur),
+):
+    s = db.query(models.Signalement).filter(models.Signalement.id == signalement_id).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="Signalement introuvable")
+    s.traite = True
+    db.commit()
+    journaliser(db, acteur["user_id"], "signalement_traite", f"signalement #{signalement_id}")
+    return {"traite": True}
+
+
+@app.get("/admin/journal")
+def admin_journal(
+    db: Session = Depends(get_db),
+    acteur: dict = Depends(exiger_admin),
+):
+    lignes = (
+        db.query(models.ActionModeration)
+        .order_by(models.ActionModeration.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    return [
+        {"id": l.id, "par": l.clerk_user_id, "action": l.action, "details": l.details, "created_at": l.created_at}
+        for l in lignes
+    ]
+
+
 class MessageContact(PydanticBase):
     message: str = Field(min_length=1, max_length=2000)
 

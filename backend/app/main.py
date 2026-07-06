@@ -60,7 +60,16 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown(wait=False)
 
 
-app = FastAPI(title="Gen Don API", lifespan=lifespan)
+# Documentation API désactivée en production (exposer /docs révèle toute la structure,
+# y compris les routes admin). Activable en local via ENABLE_DOCS=1.
+_docs_actifs = os.getenv("ENABLE_DOCS") == "1"
+app = FastAPI(
+    title="Gen Don API",
+    lifespan=lifespan,
+    docs_url="/docs" if _docs_actifs else None,
+    redoc_url="/redoc" if _docs_actifs else None,
+    openapi_url="/openapi.json" if _docs_actifs else None,
+)
 
 _origins = ["http://localhost:3000"]
 for _url in os.getenv("FRONTEND_URL", "").split(","):
@@ -90,6 +99,11 @@ def verifier_rate_limit(user_id: str, action: str, maximum: int, fenetre_seconde
     if len(appels) >= maximum:
         raise HTTPException(status_code=429, detail="Trop de requêtes, réessayez plus tard")
     appels.append(maintenant)
+
+
+def echapper_like(terme: str) -> str:
+    """Neutralise les jokers LIKE (% et _) pour qu'ils soient cherchés littéralement."""
+    return terme.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def extraire_public_id(url: str) -> str:
@@ -262,9 +276,9 @@ def lister_annonces(
     if categorie:
         query = query.filter(models.Annonce.categorie == categorie)
     if recherche:
-        terme = f"%{recherche}%"
+        terme = f"%{echapper_like(recherche.strip()[:100])}%"
         query = query.filter(
-            models.Annonce.titre.ilike(terme) | models.Annonce.description.ilike(terme)
+            models.Annonce.titre.ilike(terme, escape="\\") | models.Annonce.description.ilike(terme, escape="\\")
         )
     if quartier:
         query = query.filter(models.Annonce.quartier == quartier)
@@ -514,11 +528,11 @@ def admin_lister_annonces(
     page = max(1, page)
     query = db.query(models.Annonce)
     if recherche:
-        terme = f"%{recherche}%"
+        terme = f"%{echapper_like(recherche.strip()[:100])}%"
         query = query.filter(
-            models.Annonce.titre.ilike(terme)
-            | models.Annonce.description.ilike(terme)
-            | models.Annonce.pseudo.ilike(terme)
+            models.Annonce.titre.ilike(terme, escape="\\")
+            | models.Annonce.description.ilike(terme, escape="\\")
+            | models.Annonce.pseudo.ilike(terme, escape="\\")
         )
     query = query.order_by(models.Annonce.created_at.desc())
     total = query.count()

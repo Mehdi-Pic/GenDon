@@ -1,5 +1,5 @@
 # API Gen Don (déploiement Railway)
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text, inspect as sa_inspect
@@ -20,6 +20,7 @@ from contextlib import asynccontextmanager
 from collections import defaultdict, deque
 from functools import partial
 from apscheduler.schedulers.background import BackgroundScheduler
+from svix.webhooks import Webhook, WebhookVerificationError
 import anyio.to_thread
 import asyncio
 import time
@@ -211,6 +212,42 @@ def envoyer_rappels_expiration():
 @app.get("/")
 def root():
     return {"message": "Gen Don API"}
+
+
+def purger_donnees_utilisateur(db: Session, clerk_user_id: str):
+    """Efface toutes les données GenDon liées à un utilisateur (RGPD / suppression de compte)."""
+    annonces = db.query(models.Annonce).filter(models.Annonce.clerk_user_id == clerk_user_id).all()
+    for annonce in annonces:
+        supprimer_images_cloudinary(annonce.images or [])
+        db.delete(annonce)  # favoris et signalements liés partent en cascade
+    db.query(models.Favori).filter(models.Favori.clerk_user_id == clerk_user_id).delete()
+    db.query(models.Signalement).filter(models.Signalement.clerk_user_id == clerk_user_id).delete()
+    db.query(models.Role).filter(models.Role.clerk_user_id == clerk_user_id).delete()
+    db.commit()
+
+
+@app.post("/webhooks/clerk")
+async def webhook_clerk(request: Request, db: Session = Depends(get_db)):
+    secret = os.getenv("CLERK_WEBHOOK_SECRET")
+    if not secret:
+        raise HTTPException(status_code=500, detail="Webhook non configuré")
+
+    payload = await request.body()
+    headers = {
+        "svix-id": request.headers.get("svix-id", ""),
+        "svix-timestamp": request.headers.get("svix-timestamp", ""),
+        "svix-signature": request.headers.get("svix-signature", ""),
+    }
+    try:
+        evenement = Webhook(secret).verify(payload, headers)
+    except WebhookVerificationError:
+        raise HTTPException(status_code=401, detail="Signature invalide")
+
+    if evenement.get("type") == "user.deleted":
+        uid = (evenement.get("data") or {}).get("id")
+        if uid:
+            purger_donnees_utilisateur(db, uid)
+    return {"recu": True}
 
 
 TYPES_IMAGE_AUTORISES = {"image/jpeg", "image/png", "image/webp", "image/gif"}

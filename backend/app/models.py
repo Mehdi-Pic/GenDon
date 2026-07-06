@@ -28,3 +28,35 @@ class Favori(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (UniqueConstraint("clerk_user_id", "annonce_id", name="uq_favori_user_annonce"),)
+
+
+class Role(Base):
+    __tablename__ = "roles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    clerk_user_id = Column(String(100), nullable=False, unique=True, index=True)
+    role = Column(String(20), nullable=False)  # "admin" ou "moderateur"
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Signalement(Base):
+    __tablename__ = "signalements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    annonce_id = Column(Integer, ForeignKey("annonces.id", ondelete="CASCADE"), nullable=False)
+    clerk_user_id = Column(String(100), nullable=False)
+    raison = Column(String(500), nullable=False)
+    traite = Column(Boolean, nullable=False, default=False, server_default="false")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("clerk_user_id", "annonce_id", name="uq_signalement_user_annonce"),)
+
+
+class ActionModeration(Base):
+    __tablename__ = "actions_moderation"
+
+    id = Column(Integer, primary_key=True, index=True)
+    clerk_user_id = Column(String(100), nullable=False)
+    action = Column(String(50), nullable=False)
+    details = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -8,6 +8,7 @@ import ContactButton from "./ContactButton"
 import ShareButton from "./ShareButton"
 import FavoriButton from "../../components/FavoriButton"
 import VueTracker from "./VueTracker"
+import SignalerButton from "./SignalerButton"
 import { vignette, type Annonce } from "../../lib/annonces"
 
 async function getAnnonce(id: string, token?: string | null): Promise<Annonce | null> {
@@ -93,7 +94,12 @@ export default async function AnnonceDetail({ params }: { params: Promise<{ id: 
             </Link>
           </div>
         ) : (
-          <ContactButton annonceId={annonce.id} titreDon={annonce.titre} />
+          <>
+            <ContactButton annonceId={annonce.id} titreDon={annonce.titre} />
+            <div className="mt-6 text-center">
+              <SignalerButton annonceId={annonce.id} />
+            </div>
+          </>
         )}
       </div>
     </main>

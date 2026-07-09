@@ -55,8 +55,6 @@ L'authentification repose sur la **vérification des tokens JWT de Clerk côté 
 
 ## Pistes d'amélioration
 
-- Bouton "Signaler" et interface de modération
-- Suppression de compte en self-service (RGPD)
 - Suivi d'erreurs (Sentry)
 - Tests automatisés (pytest / CI)
 - Compatibilité Mac

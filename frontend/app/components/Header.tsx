@@ -1,11 +1,46 @@
 "use client"
 
-import { Suspense, useState } from "react"
-import { Search, Plus } from "lucide-react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { Suspense, useState, useEffect } from "react"
+import { Search, Plus, MessageCircle } from "lucide-react"
+import { useSearchParams, useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import { SignInButton, Show, UserButton } from "@clerk/nextjs"
+import { SignInButton, Show, UserButton, useAuth } from "@clerk/nextjs"
 import { CATEGORIES as categories } from "../lib/annonces"
+
+function MessagesLink() {
+  const { isSignedIn, getToken } = useAuth()
+  const pathname = usePathname()
+  const [nonLus, setNonLus] = useState(0)
+
+  useEffect(() => {
+    if (!isSignedIn) return
+    let actif = true
+    async function charger() {
+      try {
+        const token = await getToken()
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/non-lus`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await res.json()
+        if (actif && res.ok) setNonLus(data.non_lus ?? 0)
+      } catch {}
+    }
+    charger()
+    const intervalle = setInterval(charger, 20000)
+    return () => { actif = false; clearInterval(intervalle) }
+  }, [isSignedIn, getToken, pathname])
+
+  return (
+    <Link href="/messages" aria-label="Messages" className="relative text-gray-600 hover:text-gray-900 transition-colors">
+      <MessageCircle className="w-6 h-6" />
+      {nonLus > 0 && (
+        <span className="absolute -top-1.5 -right-1.5 bg-green-600 text-white text-[10px] font-bold rounded-full min-w-4 h-4 px-1 flex items-center justify-center">
+          {nonLus > 9 ? "9+" : nonLus}
+        </span>
+      )}
+    </Link>
+  )
+}
 
 function SearchBar() {
   const searchParams = useSearchParams()
@@ -88,6 +123,7 @@ export default function Header() {
             </SignInButton>
           </Show>
           <Show when="signed-in">
+            <MessagesLink />
             <Link href="/profil" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
               Mon profil
             </Link>

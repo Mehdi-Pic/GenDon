@@ -22,7 +22,6 @@ from functools import partial
 from apscheduler.schedulers.background import BackgroundScheduler
 from svix.webhooks import Webhook, WebhookVerificationError
 import anyio.to_thread
-import asyncio
 import time
 import os
 
@@ -223,6 +222,16 @@ def purger_donnees_utilisateur(db: Session, clerk_user_id: str):
     db.query(models.Favori).filter(models.Favori.clerk_user_id == clerk_user_id).delete()
     db.query(models.Signalement).filter(models.Signalement.clerk_user_id == clerk_user_id).delete()
     db.query(models.Role).filter(models.Role.clerk_user_id == clerk_user_id).delete()
+    conversations = (
+        db.query(models.Conversation)
+        .filter(
+            (models.Conversation.donneur_id == clerk_user_id)
+            | (models.Conversation.demandeur_id == clerk_user_id)
+        )
+        .all()
+    )
+    for conv in conversations:
+        db.delete(conv)  # messages liés partent en cascade
     db.commit()
 
 
@@ -712,18 +721,82 @@ def admin_journal(
     ]
 
 
-class MessageContact(PydanticBase):
-    message: str = Field(min_length=1, max_length=2000)
+# ---------- Messagerie (chat) ----------
+
+def _est_participant(conv, user_id: str) -> bool:
+    return user_id in (conv.donneur_id, conv.demandeur_id)
 
 
-@app.post("/annonces/{annonce_id}/contact")
-async def contacter_donneur(
-    annonce_id: int,
-    data: MessageContact,
+async def _pseudo_clerk(user_id: str) -> str:
+    """Récupère le pseudo d'affichage d'un utilisateur via Clerk (au démarrage d'une conversation)."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
+                f"https://api.clerk.com/v1/users/{user_id}",
+                headers={"Authorization": f"Bearer {os.getenv('CLERK_SECRET_KEY')}"},
+            )
+        if r.is_success:
+            u = r.json()
+            return u.get("username") or u.get("first_name") or "Un habitant"
+    except Exception:
+        pass
+    return "Un habitant"
+
+
+async def _notifier_nouveau_message(destinataire_id: str, expediteur_pseudo: str, annonce_titre: str, conversation_id: int):
+    """Email 'nouveau message' au destinataire (best-effort, jamais bloquant)."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
+                f"https://api.clerk.com/v1/users/{destinataire_id}",
+                headers={"Authorization": f"Bearer {os.getenv('CLERK_SECRET_KEY')}"},
+            )
+        if not r.is_success:
+            return
+        email = _email_principal(r.json())
+        if not email:
+            return
+        frontend = os.getenv("FRONTEND_URL", "").split(",")[0].strip() or "https://www.gendon.fr"
+        resend.api_key = os.getenv("RESEND_API_KEY")
+        payload = {
+            "from": f"GenDon <{os.getenv('RESEND_FROM_EMAIL', 'onboarding@resend.dev')}>",
+            "to": [email],
+            "subject": f"Nouveau message de {expediteur_pseudo} sur GenDon",
+            "html": f"""
+            <div style="font-family:sans-serif;max-width:560px;margin:auto;color:#111">
+              <p style="font-size:18px;font-weight:700;margin-bottom:4px">Vous avez un nouveau message</p>
+              <p style="color:#6b7280;margin-top:0">via <strong>GenDon</strong> · Gennevilliers</p>
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+              <p><strong>{escape(expediteur_pseudo)}</strong> vous a écrit à propos de :</p>
+              <p style="background:#f9fafb;border-left:3px solid #16a34a;padding:12px 16px;border-radius:4px;font-weight:600">{escape(annonce_titre)}</p>
+              <p style="margin-top:24px">
+                <a href="{frontend}/messages/{conversation_id}" style="background:#16a34a;color:#fff;text-decoration:none;padding:11px 22px;border-radius:9999px;font-weight:600;display:inline-block">Voir la conversation</a>
+              </p>
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+              <p style="color:#9ca3af;font-size:12px">GenDon · Dons gratuits entre habitants de Gennevilliers</p>
+            </div>
+            """,
+        }
+        await anyio.to_thread.run_sync(partial(resend.Emails.send, payload))
+    except Exception:
+        pass
+
+
+class ConversationCreate(PydanticBase):
+    annonce_id: int
+
+
+class MessageCreate(PydanticBase):
+    contenu: str = Field(min_length=1, max_length=2000)
+
+
+@app.post("/conversations")
+async def demarrer_conversation(
+    data: ConversationCreate,
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    annonce = db.query(models.Annonce).filter(models.Annonce.id == annonce_id).first()
+    annonce = db.query(models.Annonce).filter(models.Annonce.id == data.annonce_id).first()
     if not annonce:
         raise HTTPException(status_code=404, detail="Annonce introuvable")
     if not annonce.clerk_user_id:
@@ -731,67 +804,183 @@ async def contacter_donneur(
     if annonce.clerk_user_id == user_id:
         raise HTTPException(status_code=400, detail="Vous ne pouvez pas contacter votre propre annonce")
 
-    verifier_rate_limit(user_id, "contact", maximum=5, fenetre_secondes=3600)
+    existante = (
+        db.query(models.Conversation)
+        .filter(models.Conversation.annonce_id == data.annonce_id, models.Conversation.demandeur_id == user_id)
+        .first()
+    )
+    if existante:
+        return {"id": existante.id}
 
-    clerk_secret = os.getenv("CLERK_SECRET_KEY")
-    headers_clerk = {"Authorization": f"Bearer {clerk_secret}"}
+    demandeur_pseudo = await _pseudo_clerk(user_id)
+    conv = models.Conversation(
+        annonce_id=data.annonce_id,
+        donneur_id=annonce.clerk_user_id,
+        demandeur_id=user_id,
+        donneur_pseudo=(annonce.pseudo or "Un habitant")[:50],
+        demandeur_pseudo=demandeur_pseudo[:50],
+    )
+    db.add(conv)
+    db.commit()
+    db.refresh(conv)
+    return {"id": conv.id}
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        donor_res, requester_res = await asyncio.gather(
-            client.get(f"https://api.clerk.com/v1/users/{annonce.clerk_user_id}", headers=headers_clerk),
-            client.get(f"https://api.clerk.com/v1/users/{user_id}", headers=headers_clerk),
+
+@app.get("/conversations")
+def mes_conversations(
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    convs = (
+        db.query(models.Conversation)
+        .filter((models.Conversation.donneur_id == user_id) | (models.Conversation.demandeur_id == user_id))
+        .order_by(models.Conversation.dernier_message_at.desc())
+        .all()
+    )
+    if not convs:
+        return []
+    ids = [c.id for c in convs]
+    annonces = {
+        a.id: a for a in db.query(models.Annonce).filter(models.Annonce.id.in_({c.annonce_id for c in convs})).all()
+    }
+    non_lus = dict(
+        db.query(models.Message.conversation_id, func.count(models.Message.id))
+        .filter(models.Message.conversation_id.in_(ids), models.Message.auteur_id != user_id, models.Message.lu == False)
+        .group_by(models.Message.conversation_id)
+        .all()
+    )
+    resultat = []
+    for c in convs:
+        dernier = (
+            db.query(models.Message)
+            .filter(models.Message.conversation_id == c.id)
+            .order_by(models.Message.created_at.desc())
+            .first()
         )
+        annonce = annonces.get(c.annonce_id)
+        resultat.append({
+            "id": c.id,
+            "annonce_id": c.annonce_id,
+            "annonce_titre": annonce.titre if annonce else "Annonce supprimée",
+            "annonce_image": (annonce.images[0] if annonce and annonce.images else None),
+            "interlocuteur": c.demandeur_pseudo if c.donneur_id == user_id else c.donneur_pseudo,
+            "dernier_message": dernier.contenu if dernier else None,
+            "dernier_message_at": c.dernier_message_at,
+            "non_lus": non_lus.get(c.id, 0),
+        })
+    return resultat
 
-    if not donor_res.is_success or not requester_res.is_success:
-        raise HTTPException(status_code=400, detail="Impossible de contacter ce donneur")
 
-    donor = donor_res.json()
-    requester = requester_res.json()
-
-    def email_principal(user: dict):
-        primary_id = user.get("primary_email_address_id")
-        return next((e["email_address"] for e in user.get("email_addresses", []) if e["id"] == primary_id), None)
-
-    donor_email = email_principal(donor)
-    requester_email = email_principal(requester)
-
-    if not donor_email:
-        raise HTTPException(status_code=400, detail="Impossible de contacter ce donneur")
-
-    requester_name = requester.get("username") or requester.get("first_name") or "Un habitant de Gennevilliers"
-
-    resend.api_key = os.getenv("RESEND_API_KEY")
-
-    email_payload = {
-        "from": f"GenDon <{os.getenv('RESEND_FROM_EMAIL', 'onboarding@resend.dev')}>",
-        "to": [donor_email],
-        **({"reply_to": requester_email} if requester_email else {}),
-        "subject": f"{requester_name} est intéressé(e) par votre don : {annonce.titre}",
-        "html": f"""
-        <div style="font-family:sans-serif;max-width:560px;margin:auto;color:#111">
-          <p style="font-size:18px;font-weight:700;margin-bottom:4px">Quelqu'un veut votre don !</p>
-          <p style="color:#6b7280;margin-top:0">via <strong>GenDon</strong> · Gennevilliers</p>
-          <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
-          <p><strong>{escape(requester_name)}</strong> est intéressé(e) par votre annonce :</p>
-          <p style="background:#f9fafb;border-left:3px solid #16a34a;padding:12px 16px;border-radius:4px;font-weight:600">{escape(annonce.titre)}</p>
-          <p>Son message :</p>
-          <blockquote style="background:#f9fafb;border-left:3px solid #d1d5db;padding:12px 16px;margin:0;border-radius:4px;color:#374151">
-            {escape(data.message)}
-          </blockquote>
-          <p style="margin-top:24px">Pour lui répondre, <strong>répondez simplement à cet email</strong>.</p>
-          <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
-          <p style="color:#9ca3af;font-size:12px">GenDon · Dons gratuits entre habitants de Gennevilliers</p>
-        </div>
-        """,
+@app.get("/conversations/{conversation_id}/messages")
+def get_conversation(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    conv = db.query(models.Conversation).filter(models.Conversation.id == conversation_id).first()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
+    if not _est_participant(conv, user_id):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    annonce = db.query(models.Annonce).filter(models.Annonce.id == conv.annonce_id).first()
+    messages = (
+        db.query(models.Message)
+        .filter(models.Message.conversation_id == conversation_id)
+        .order_by(models.Message.created_at.asc())
+        .all()
+    )
+    return {
+        "id": conv.id,
+        "annonce_id": conv.annonce_id,
+        "annonce_titre": annonce.titre if annonce else "Annonce supprimée",
+        "annonce_image": (annonce.images[0] if annonce and annonce.images else None),
+        "interlocuteur": conv.demandeur_pseudo if conv.donneur_id == user_id else conv.donneur_pseudo,
+        "messages": [
+            {"id": m.id, "contenu": m.contenu, "created_at": m.created_at, "a_moi": m.auteur_id == user_id}
+            for m in messages
+        ],
     }
 
-    try:
-        # Resend (basé sur requests, synchrone) → thread pour ne pas bloquer l'event loop
-        await anyio.to_thread.run_sync(partial(resend.Emails.send, email_payload))
-    except Exception:
-        raise HTTPException(status_code=500, detail="Erreur lors de l'envoi du message")
 
-    return {"message": "Message envoyé"}
+@app.post("/conversations/{conversation_id}/messages")
+async def envoyer_message(
+    conversation_id: int,
+    data: MessageCreate,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    conv = db.query(models.Conversation).filter(models.Conversation.id == conversation_id).first()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
+    if not _est_participant(conv, user_id):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    verifier_rate_limit(user_id, "message", maximum=60, fenetre_secondes=3600)
+
+    msg = models.Message(conversation_id=conversation_id, auteur_id=user_id, contenu=data.contenu.strip())
+    db.add(msg)
+    conv.dernier_message_at = datetime.now(timezone.utc)
+
+    # Notification email au destinataire, une seule fois tant qu'il n'a pas lu (anti-spam)
+    if user_id == conv.donneur_id:
+        destinataire_id, expediteur_pseudo = conv.demandeur_id, conv.donneur_pseudo
+        doit_notifier = not conv.notif_demandeur_envoyee
+        conv.notif_demandeur_envoyee = True
+    else:
+        destinataire_id, expediteur_pseudo = conv.donneur_id, conv.demandeur_pseudo
+        doit_notifier = not conv.notif_donneur_envoyee
+        conv.notif_donneur_envoyee = True
+
+    annonce = db.query(models.Annonce).filter(models.Annonce.id == conv.annonce_id).first()
+    annonce_titre = annonce.titre if annonce else "votre annonce"
+    db.commit()
+    db.refresh(msg)
+
+    if doit_notifier:
+        await _notifier_nouveau_message(destinataire_id, expediteur_pseudo, annonce_titre, conversation_id)
+
+    return {"id": msg.id, "contenu": msg.contenu, "created_at": msg.created_at, "a_moi": True}
+
+
+@app.post("/conversations/{conversation_id}/lu")
+def marquer_lu(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    conv = db.query(models.Conversation).filter(models.Conversation.id == conversation_id).first()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
+    if not _est_participant(conv, user_id):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    db.query(models.Message).filter(
+        models.Message.conversation_id == conversation_id,
+        models.Message.auteur_id != user_id,
+        models.Message.lu == False,
+    ).update({models.Message.lu: True})
+    if user_id == conv.donneur_id:
+        conv.notif_donneur_envoyee = False
+    else:
+        conv.notif_demandeur_envoyee = False
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/messages/non-lus")
+def compteur_non_lus(
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    total = (
+        db.query(models.Message)
+        .join(models.Conversation, models.Message.conversation_id == models.Conversation.id)
+        .filter(
+            (models.Conversation.donneur_id == user_id) | (models.Conversation.demandeur_id == user_id),
+            models.Message.auteur_id != user_id,
+            models.Message.lu == False,
+        )
+        .count()
+    )
+    return {"non_lus": total}
 
 
 @app.delete("/annonces/{annonce_id}")

@@ -60,3 +60,32 @@ class ActionModeration(Base):
     action = Column(String(50), nullable=False)
     details = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    annonce_id = Column(Integer, ForeignKey("annonces.id", ondelete="CASCADE"), nullable=False)
+    donneur_id = Column(String(100), nullable=False, index=True)
+    demandeur_id = Column(String(100), nullable=False, index=True)
+    donneur_pseudo = Column(String(50), nullable=False, default="")
+    demandeur_pseudo = Column(String(50), nullable=False, default="")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    dernier_message_at = Column(DateTime(timezone=True), server_default=func.now())
+    # Email de notification déjà envoyé pour du non-lu : évite de spammer à chaque message
+    notif_donneur_envoyee = Column(Boolean, nullable=False, default=False, server_default="false")
+    notif_demandeur_envoyee = Column(Boolean, nullable=False, default=False, server_default="false")
+
+    __table_args__ = (UniqueConstraint("annonce_id", "demandeur_id", name="uq_conversation_annonce_demandeur"),)
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    auteur_id = Column(String(100), nullable=False)
+    contenu = Column(String(2000), nullable=False)
+    lu = Column(Boolean, nullable=False, default=False, server_default="false")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

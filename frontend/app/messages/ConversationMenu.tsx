@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useAuth } from "@clerk/nextjs"
-import { MoreVertical, Flag, Trash2, X, CheckCircle } from "lucide-react"
+import { MoreVertical, Flag, LogOut, X, CheckCircle } from "lucide-react"
 
 export default function ConversationMenu({
   conversationId,
@@ -27,7 +27,7 @@ export default function ConversationMenu({
     e.preventDefault()
     e.stopPropagation()
     setOuvert(false)
-    if (!confirm("Supprimer cette conversation ? Les messages seront définitivement effacés.")) return
+    if (!confirm("Quitter cette conversation ? Elle disparaîtra de votre liste et votre interlocuteur en sera informé.")) return
     try {
       const token = await getToken()
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/conversations/${conversationId}`, {
@@ -37,7 +37,7 @@ export default function ConversationMenu({
       if (!res.ok) throw new Error()
       onDeleted()
     } catch {
-      alert("La suppression a échoué.")
+      alert("L'opération a échoué.")
     }
   }
 
@@ -87,14 +87,14 @@ export default function ConversationMenu({
                 className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left"
               >
                 <Flag className="w-4 h-4 text-gray-500" />
-                Signaler
+                Signaler la conversation
               </button>
               <button
                 onClick={supprimer}
                 className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors text-left"
               >
-                <Trash2 className="w-4 h-4" />
-                Supprimer
+                <LogOut className="w-4 h-4" />
+                Quitter la conversation
               </button>
             </div>
           </>

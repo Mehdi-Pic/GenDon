@@ -8,13 +8,14 @@ import { ArrowLeft, Send } from "lucide-react"
 import { vignette } from "../../lib/annonces"
 import ConversationMenu from "../ConversationMenu"
 
-type Message = { id: number; contenu: string; created_at: string; a_moi: boolean }
+type Message = { id: number; contenu: string; created_at: string; a_moi: boolean; systeme?: boolean }
 type Fil = {
   id: number
   annonce_id: number
   annonce_titre: string
   annonce_image: string | null
   interlocuteur: string
+  autre_present: boolean
   messages: Message[]
 }
 
@@ -150,43 +151,55 @@ export default function Conversation({ params }: { params: Promise<{ id: string 
               Écrivez le premier message à {fil.interlocuteur}.
             </p>
           ) : (
-            fil.messages.map((m) => (
-              <div key={m.id} className={`flex ${m.a_moi ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed break-words ${
-                    m.a_moi ? "bg-green-600 text-white rounded-br-md" : "bg-gray-100 text-gray-900 rounded-bl-md"
-                  }`}
-                >
-                  {m.contenu}
-                  <span className={`block text-[10px] mt-1 ${m.a_moi ? "text-green-100" : "text-gray-400"}`}>
-                    {new Date(m.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-                  </span>
+            fil.messages.map((m) =>
+              m.systeme ? (
+                <div key={m.id} className="flex justify-center my-1">
+                  <span className="text-xs text-gray-400 bg-gray-50 rounded-full px-3 py-1">{m.contenu}</span>
                 </div>
-              </div>
-            ))
+              ) : (
+                <div key={m.id} className={`flex ${m.a_moi ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed break-words ${
+                      m.a_moi ? "bg-green-600 text-white rounded-br-md" : "bg-gray-100 text-gray-900 rounded-bl-md"
+                    }`}
+                  >
+                    {m.contenu}
+                    <span className={`block text-[10px] mt-1 ${m.a_moi ? "text-green-100" : "text-gray-400"}`}>
+                      {new Date(m.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                </div>
+              )
+            )
           )}
           <div ref={basRef} />
         </div>
 
-        <form onSubmit={envoyer} className="flex items-end gap-2 pt-3 border-t border-gray-100 sticky bottom-0 bg-white">
-          <textarea
-            value={texte}
-            onChange={(e) => setTexte(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) envoyer(e) }}
-            maxLength={2000}
-            rows={1}
-            placeholder="Votre message..."
-            className="flex-1 border border-gray-200 rounded-2xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-500 resize-none max-h-32"
-          />
-          <button
-            type="submit"
-            disabled={envoi || !texte.trim()}
-            className="shrink-0 bg-green-600 hover:bg-green-500 disabled:bg-gray-300 text-white rounded-full w-11 h-11 flex items-center justify-center transition-colors"
-            aria-label="Envoyer"
-          >
-            <Send className="w-5 h-5" />
-          </button>
-        </form>
+        {fil.autre_present ? (
+          <form onSubmit={envoyer} className="flex items-end gap-2 pt-3 border-t border-gray-100 sticky bottom-0 bg-white">
+            <textarea
+              value={texte}
+              onChange={(e) => setTexte(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) envoyer(e) }}
+              maxLength={2000}
+              rows={1}
+              placeholder="Votre message..."
+              className="flex-1 border border-gray-200 rounded-2xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-500 resize-none max-h-32"
+            />
+            <button
+              type="submit"
+              disabled={envoi || !texte.trim()}
+              className="shrink-0 bg-green-600 hover:bg-green-500 disabled:bg-gray-300 text-white rounded-full w-11 h-11 flex items-center justify-center transition-colors"
+              aria-label="Envoyer"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          </form>
+        ) : (
+          <div className="pt-3 border-t border-gray-100 text-center text-sm text-gray-400 py-3">
+            {fil.interlocuteur} a quitté la conversation. Vous ne pouvez plus envoyer de message.
+          </div>
+        )}
       </div>
     </main>
   )

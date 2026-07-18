@@ -16,6 +16,7 @@ type Conversation = {
   interlocuteur: string
   dernier_message: string | null
   dernier_message_at: string
+  created_at: string
   non_lus: number
 }
 
@@ -90,6 +91,7 @@ export default function Messages() {
                       <p className="font-bold text-gray-900 text-sm truncate">{c.interlocuteur}</p>
                       <span className="text-xs text-gray-300 shrink-0">·</span>
                       <p className="text-xs text-gray-400 truncate">{c.annonce_titre}</p>
+                      <span className="text-xs text-gray-300 shrink-0 ml-auto">{new Date(c.created_at).toLocaleDateString("fr-FR")}</span>
                     </div>
                     <p className={`text-sm truncate mt-0.5 ${c.non_lus > 0 ? "text-gray-900 font-medium" : "text-gray-500"}`}>
                       {c.dernier_message ?? "Nouvelle conversation"}

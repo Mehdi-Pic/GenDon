@@ -87,14 +87,14 @@ export default function ConversationMenu({
                 className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left whitespace-nowrap"
               >
                 <Flag className="w-4 h-4 text-gray-500 shrink-0" />
-                Signaler<span className="hidden sm:inline">&nbsp;la conversation</span>
+                <span>Signaler<span className="hidden sm:inline"> la conversation</span></span>
               </button>
               <button
                 onClick={supprimer}
                 className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors text-left whitespace-nowrap"
               >
                 <LogOut className="w-4 h-4 shrink-0" />
-                Quitter<span className="hidden sm:inline">&nbsp;la conversation</span>
+                <span>Quitter<span className="hidden sm:inline"> la conversation</span></span>
               </button>
             </div>
           </>

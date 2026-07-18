@@ -887,6 +887,7 @@ def mes_conversations(
             "interlocuteur": c.demandeur_pseudo if c.donneur_id == user_id else c.donneur_pseudo,
             "dernier_message": dernier.contenu if dernier else None,
             "dernier_message_at": c.dernier_message_at,
+            "created_at": c.created_at,
             "non_lus": non_lus.get(c.id, 0),
         })
     return resultat

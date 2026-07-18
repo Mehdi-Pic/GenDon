@@ -77,11 +77,17 @@ export default function Conversation({ params }: { params: Promise<{ id: string 
     }
   }, [fil])
 
+  // Défile jusqu'au spinner quand l'envoi démarre
+  useEffect(() => {
+    if (envoi) basRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [envoi])
+
   async function envoyer(e: React.SyntheticEvent) {
     e.preventDefault()
     const contenu = texte.trim()
     if (!contenu || envoi) return
     setEnvoi(true)
+    setTexte("")
     try {
       const token = await getToken()
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/conversations/${id}/messages`, {
@@ -90,10 +96,13 @@ export default function Conversation({ params }: { params: Promise<{ id: string 
         body: JSON.stringify({ contenu }),
       })
       if (res.ok) {
-        const msg: Message = await res.json()
-        setFil((prev) => (prev ? { ...prev, messages: [...prev.messages, msg] } : prev))
-        setTexte("")
+        // On recharge depuis le serveur : le message s'affiche une seule fois, pas de doublon
+        await charger(false)
+      } else {
+        setTexte(contenu) // échec : on restaure le texte
       }
+    } catch {
+      setTexte(contenu)
     } finally {
       setEnvoi(false)
     }
@@ -171,6 +180,16 @@ export default function Conversation({ params }: { params: Promise<{ id: string 
                 </div>
               )
             )
+          )}
+          {envoi && (
+            <div className="flex justify-end">
+              <div className="bg-green-600/70 text-white rounded-2xl rounded-br-md px-4 py-3 flex items-center">
+                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none" aria-label="Envoi en cours">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                </svg>
+              </div>
+            </div>
           )}
           <div ref={basRef} />
         </div>

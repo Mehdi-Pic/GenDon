@@ -47,6 +47,19 @@ with engine.connect() as conn:
     if "rappel_envoye" not in colonnes:
         conn.execute(text("ALTER TABLE annonces ADD COLUMN rappel_envoye BOOLEAN NOT NULL DEFAULT FALSE"))
         conn.commit()
+    if sa_inspect(engine).has_table("conversations"):
+        col_conv = [c["name"] for c in sa_inspect(engine).get_columns("conversations")]
+        if "donneur_actif" not in col_conv:
+            conn.execute(text("ALTER TABLE conversations ADD COLUMN donneur_actif BOOLEAN NOT NULL DEFAULT TRUE"))
+            conn.commit()
+        if "demandeur_actif" not in col_conv:
+            conn.execute(text("ALTER TABLE conversations ADD COLUMN demandeur_actif BOOLEAN NOT NULL DEFAULT TRUE"))
+            conn.commit()
+    if sa_inspect(engine).has_table("messages"):
+        col_msg = [c["name"] for c in sa_inspect(engine).get_columns("messages")]
+        if "systeme" not in col_msg:
+            conn.execute(text("ALTER TABLE messages ADD COLUMN systeme BOOLEAN NOT NULL DEFAULT FALSE"))
+            conn.commit()
 
 scheduler = BackgroundScheduler(daemon=True)
 
@@ -833,7 +846,10 @@ def mes_conversations(
 ):
     convs = (
         db.query(models.Conversation)
-        .filter((models.Conversation.donneur_id == user_id) | (models.Conversation.demandeur_id == user_id))
+        .filter(
+            ((models.Conversation.donneur_id == user_id) & (models.Conversation.donneur_actif == True))
+            | ((models.Conversation.demandeur_id == user_id) & (models.Conversation.demandeur_actif == True))
+        )
         .order_by(models.Conversation.dernier_message_at.desc())
         .all()
     )
@@ -845,7 +861,12 @@ def mes_conversations(
     }
     non_lus = dict(
         db.query(models.Message.conversation_id, func.count(models.Message.id))
-        .filter(models.Message.conversation_id.in_(ids), models.Message.auteur_id != user_id, models.Message.lu == False)
+        .filter(
+            models.Message.conversation_id.in_(ids),
+            models.Message.auteur_id != user_id,
+            models.Message.lu == False,
+            models.Message.systeme == False,
+        )
         .group_by(models.Message.conversation_id)
         .all()
     )
@@ -882,6 +903,11 @@ def get_conversation(
         raise HTTPException(status_code=404, detail="Conversation introuvable")
     if not _est_participant(conv, user_id):
         raise HTTPException(status_code=403, detail="Accès refusé")
+    # Si j'ai quitté cette conversation, elle n'est plus accessible pour moi
+    moi_actif = conv.donneur_actif if conv.donneur_id == user_id else conv.demandeur_actif
+    if not moi_actif:
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
+    autre_actif = conv.demandeur_actif if conv.donneur_id == user_id else conv.donneur_actif
     annonce = db.query(models.Annonce).filter(models.Annonce.id == conv.annonce_id).first()
     messages = (
         db.query(models.Message)
@@ -895,8 +921,9 @@ def get_conversation(
         "annonce_titre": annonce.titre if annonce else "Annonce supprimée",
         "annonce_image": (annonce.images[0] if annonce and annonce.images else None),
         "interlocuteur": conv.demandeur_pseudo if conv.donneur_id == user_id else conv.donneur_pseudo,
+        "autre_present": autre_actif,
         "messages": [
-            {"id": m.id, "contenu": m.contenu, "created_at": m.created_at, "a_moi": m.auteur_id == user_id}
+            {"id": m.id, "contenu": m.contenu, "created_at": m.created_at, "a_moi": m.auteur_id == user_id, "systeme": m.systeme}
             for m in messages
         ],
     }
@@ -914,6 +941,13 @@ async def envoyer_message(
         raise HTTPException(status_code=404, detail="Conversation introuvable")
     if not _est_participant(conv, user_id):
         raise HTTPException(status_code=403, detail="Accès refusé")
+    # Si j'ai quitté, ou si l'autre a quitté, on ne peut plus écrire
+    moi_actif = conv.donneur_actif if conv.donneur_id == user_id else conv.demandeur_actif
+    if not moi_actif:
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
+    autre_actif = conv.demandeur_actif if conv.donneur_id == user_id else conv.donneur_actif
+    if not autre_actif:
+        raise HTTPException(status_code=400, detail="Cette personne a quitté la conversation")
     verifier_rate_limit(user_id, "message", maximum=60, fenetre_secondes=3600)
 
     msg = models.Message(conversation_id=conversation_id, auteur_id=user_id, contenu=data.contenu.strip())
@@ -938,7 +972,7 @@ async def envoyer_message(
     if doit_notifier:
         await _notifier_nouveau_message(destinataire_id, expediteur_pseudo, annonce_titre, conversation_id)
 
-    return {"id": msg.id, "contenu": msg.contenu, "created_at": msg.created_at, "a_moi": True}
+    return {"id": msg.id, "contenu": msg.contenu, "created_at": msg.created_at, "a_moi": True, "systeme": False}
 
 
 @app.post("/conversations/{conversation_id}/lu")
@@ -974,9 +1008,11 @@ def compteur_non_lus(
         db.query(models.Message)
         .join(models.Conversation, models.Message.conversation_id == models.Conversation.id)
         .filter(
-            (models.Conversation.donneur_id == user_id) | (models.Conversation.demandeur_id == user_id),
+            ((models.Conversation.donneur_id == user_id) & (models.Conversation.donneur_actif == True))
+            | ((models.Conversation.demandeur_id == user_id) & (models.Conversation.demandeur_actif == True)),
             models.Message.auteur_id != user_id,
             models.Message.lu == False,
+            models.Message.systeme == False,
         )
         .count()
     )
@@ -984,18 +1020,41 @@ def compteur_non_lus(
 
 
 @app.delete("/conversations/{conversation_id}")
-def supprimer_conversation(
+def quitter_conversation(
     conversation_id: int,
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
+    """Quitter une conversation : elle disparaît pour moi, et l'autre voit « X a quitté la conversation »."""
     conv = db.query(models.Conversation).filter(models.Conversation.id == conversation_id).first()
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation introuvable")
     if not _est_participant(conv, user_id):
         raise HTTPException(status_code=403, detail="Accès refusé")
-    db.delete(conv)  # messages liés partent en cascade
-    db.commit()
+
+    if user_id == conv.donneur_id:
+        conv.donneur_actif = False
+        mon_pseudo = conv.donneur_pseudo
+        autre_actif = conv.demandeur_actif
+    else:
+        conv.demandeur_actif = False
+        mon_pseudo = conv.demandeur_pseudo
+        autre_actif = conv.donneur_actif
+
+    if autre_actif:
+        # L'autre est encore là : on le prévient par un message système
+        db.add(models.Message(
+            conversation_id=conv.id,
+            auteur_id="__system__",
+            contenu=f"{mon_pseudo} a quitté la conversation",
+            systeme=True,
+        ))
+        conv.dernier_message_at = datetime.now(timezone.utc)
+        db.commit()
+    else:
+        # Les deux ont quitté : plus personne, on supprime définitivement
+        db.delete(conv)
+        db.commit()
     return {"ok": True}
 
 

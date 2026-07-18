@@ -71,6 +71,8 @@ class Conversation(Base):
     demandeur_id = Column(String(100), nullable=False, index=True)
     donneur_pseudo = Column(String(50), nullable=False, default="")
     demandeur_pseudo = Column(String(50), nullable=False, default="")
+    donneur_actif = Column(Boolean, nullable=False, default=True, server_default="true")
+    demandeur_actif = Column(Boolean, nullable=False, default=True, server_default="true")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     dernier_message_at = Column(DateTime(timezone=True), server_default=func.now())
     # Email de notification déjà envoyé pour du non-lu : évite de spammer à chaque message
@@ -88,4 +90,5 @@ class Message(Base):
     auteur_id = Column(String(100), nullable=False)
     contenu = Column(String(2000), nullable=False)
     lu = Column(Boolean, nullable=False, default=False, server_default="false")
+    systeme = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime(timezone=True), server_default=func.now())

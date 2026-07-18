@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { MessageCircle } from "lucide-react"
 import { vignette } from "../lib/annonces"
+import ConversationMenu from "./ConversationMenu"
 
 type Conversation = {
   id: number
@@ -74,32 +75,37 @@ export default function Messages() {
         ) : (
           <div className="flex flex-col gap-2">
             {conversations.map((c) => (
-              <Link
+              <div
                 key={c.id}
-                href={`/messages/${c.id}`}
-                className="flex items-center gap-3 bg-white ring-1 ring-gray-100 rounded-2xl p-3 hover:ring-gray-200 hover:shadow-sm transition-all"
+                className="flex items-center gap-2 bg-white ring-1 ring-gray-100 rounded-2xl p-3 hover:ring-gray-200 hover:shadow-sm transition-all"
               >
-                {c.annonce_image ? (
-                  <img src={vignette(c.annonce_image, 200)} alt="" className="w-14 h-14 object-cover rounded-xl shrink-0" />
-                ) : (
-                  <div className="w-14 h-14 bg-gray-100 rounded-xl shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-bold text-gray-900 text-sm truncate">{c.interlocuteur}</p>
-                    <span className="text-xs text-gray-300 shrink-0">·</span>
-                    <p className="text-xs text-gray-400 truncate">{c.annonce_titre}</p>
+                <Link href={`/messages/${c.id}`} className="flex items-center gap-3 flex-1 min-w-0">
+                  {c.annonce_image ? (
+                    <img src={vignette(c.annonce_image, 200)} alt="" className="w-14 h-14 object-cover rounded-xl shrink-0" />
+                  ) : (
+                    <div className="w-14 h-14 bg-gray-100 rounded-xl shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-gray-900 text-sm truncate">{c.interlocuteur}</p>
+                      <span className="text-xs text-gray-300 shrink-0">·</span>
+                      <p className="text-xs text-gray-400 truncate">{c.annonce_titre}</p>
+                    </div>
+                    <p className={`text-sm truncate mt-0.5 ${c.non_lus > 0 ? "text-gray-900 font-medium" : "text-gray-500"}`}>
+                      {c.dernier_message ?? "Nouvelle conversation"}
+                    </p>
                   </div>
-                  <p className={`text-sm truncate mt-0.5 ${c.non_lus > 0 ? "text-gray-900 font-medium" : "text-gray-500"}`}>
-                    {c.dernier_message ?? "Nouvelle conversation"}
-                  </p>
-                </div>
+                </Link>
                 {c.non_lus > 0 && (
                   <span className="shrink-0 bg-green-600 text-white text-xs font-bold rounded-full min-w-5 h-5 px-1.5 flex items-center justify-center">
                     {c.non_lus}
                   </span>
                 )}
-              </Link>
+                <ConversationMenu
+                  conversationId={c.id}
+                  onDeleted={() => setConversations((prev) => prev.filter((x) => x.id !== c.id))}
+                />
+              </div>
             ))}
           </div>
         )}

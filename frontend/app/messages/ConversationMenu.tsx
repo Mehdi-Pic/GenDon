@@ -81,20 +81,20 @@ export default function ConversationMenu({
         {ouvert && (
           <>
             <div className="fixed inset-0 z-30" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOuvert(false) }} />
-            <div className="absolute right-0 top-full mt-1 z-40 bg-white ring-1 ring-gray-100 rounded-2xl shadow-xl py-1.5 w-48 overflow-hidden">
+            <div className="absolute right-0 top-full mt-1 z-40 bg-white ring-1 ring-gray-100 rounded-2xl shadow-xl py-1.5 w-max overflow-hidden">
               <button
                 onClick={ouvrirSignaler}
-                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left"
+                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left whitespace-nowrap"
               >
-                <Flag className="w-4 h-4 text-gray-500" />
-                Signaler la conversation
+                <Flag className="w-4 h-4 text-gray-500 shrink-0" />
+                Signaler<span className="hidden sm:inline">&nbsp;la conversation</span>
               </button>
               <button
                 onClick={supprimer}
-                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors text-left"
+                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors text-left whitespace-nowrap"
               >
-                <LogOut className="w-4 h-4" />
-                Quitter la conversation
+                <LogOut className="w-4 h-4 shrink-0" />
+                Quitter<span className="hidden sm:inline">&nbsp;la conversation</span>
               </button>
             </div>
           </>

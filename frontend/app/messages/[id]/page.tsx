@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Send } from "lucide-react"
 import { vignette } from "../../lib/annonces"
+import ConversationMenu from "../ConversationMenu"
 
 type Message = { id: number; contenu: string; created_at: string; a_moi: boolean }
 type Fil = {
@@ -138,6 +139,9 @@ export default function Conversation({ params }: { params: Promise<{ id: string 
               <p className="text-xs text-gray-400 truncate group-hover:text-gray-600 transition-colors">{fil.annonce_titre}</p>
             </div>
           </Link>
+          <div className="ml-auto">
+            <ConversationMenu conversationId={fil.id} onDeleted={() => router.push("/messages")} />
+          </div>
         </div>
 
         <div className="flex-1 flex flex-col gap-2 py-4 overflow-y-auto">

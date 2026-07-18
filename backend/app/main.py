@@ -983,6 +983,55 @@ def compteur_non_lus(
     return {"non_lus": total}
 
 
+@app.delete("/conversations/{conversation_id}")
+def supprimer_conversation(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    conv = db.query(models.Conversation).filter(models.Conversation.id == conversation_id).first()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
+    if not _est_participant(conv, user_id):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    db.delete(conv)  # messages liés partent en cascade
+    db.commit()
+    return {"ok": True}
+
+
+class ConversationSignalement(PydanticBase):
+    raison: str = Field(min_length=3, max_length=500)
+
+
+@app.post("/conversations/{conversation_id}/signaler")
+def signaler_conversation(
+    conversation_id: int,
+    data: ConversationSignalement,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    conv = db.query(models.Conversation).filter(models.Conversation.id == conversation_id).first()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
+    if not _est_participant(conv, user_id):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    verifier_rate_limit(user_id, "signalement", maximum=5, fenetre_secondes=3600)
+    # Rattaché à l'annonce de la conversation pour apparaître dans le panel admin existant
+    raison = f"[Conversation] {data.raison.strip()}"
+    existant = (
+        db.query(models.Signalement)
+        .filter(models.Signalement.clerk_user_id == user_id, models.Signalement.annonce_id == conv.annonce_id)
+        .first()
+    )
+    if existant:
+        existant.raison = raison
+        existant.traite = False
+    else:
+        db.add(models.Signalement(annonce_id=conv.annonce_id, clerk_user_id=user_id, raison=raison))
+    db.commit()
+    return {"ok": True}
+
+
 @app.delete("/annonces/{annonce_id}")
 def supprimer_annonce(
     annonce_id: int,

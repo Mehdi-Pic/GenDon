@@ -3,7 +3,7 @@
 import { useUser, useAuth } from "@clerk/nextjs"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { MapPin, Pencil, Trash2, Eye, Heart } from "lucide-react"
+import { MapPin, Pencil, Trash2, Eye, Heart, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import AnnonceCard from "../components/AnnonceCard"
 import { vignette, type Annonce } from "../lib/annonces"
@@ -18,6 +18,7 @@ export default function Profil() {
   const [annonces, setAnnonces] = useState<Annonce[]>([])
   const [favoris, setFavoris] = useState<Annonce[]>([])
   const [loading, setLoading] = useState(true)
+  const [renouvellement, setRenouvellement] = useState<number | null>(null)
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) router.replace("/")
@@ -50,6 +51,40 @@ export default function Profil() {
     })()
     return () => { actif = false }
   }, [isLoaded, isSignedIn, getToken])
+
+  // Une annonce est supprimee automatiquement 30 jours apres sa (re)publication
+  const DUREE_VIE_JOURS = 30
+  const RENOUVELABLE_APRES_JOURS = 7
+
+  function joursRestants(annonce: Annonce) {
+    const age = (Date.now() - new Date(annonce.created_at).getTime()) / 86400000
+    return Math.max(0, Math.ceil(DUREE_VIE_JOURS - age))
+  }
+
+  function renouvelableDans(annonce: Annonce) {
+    const age = Math.floor((Date.now() - new Date(annonce.created_at).getTime()) / 86400000)
+    return Math.max(0, RENOUVELABLE_APRES_JOURS - age)
+  }
+
+  async function renouvelerAnnonce(id: number) {
+    setRenouvellement(id)
+    try {
+      const token = await getToken()
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}/renouveler`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.detail || "Le renouvellement a échoué. Réessayez.")
+        return
+      }
+      const maj: Annonce = await res.json()
+      setAnnonces((prev) => prev.map((a) => (a.id === id ? { ...a, created_at: maj.created_at } : a)))
+    } finally {
+      setRenouvellement(null)
+    }
+  }
 
   async function supprimerAnnonce(id: number) {
     if (!confirm("Supprimer cette annonce ?")) return
@@ -133,7 +168,28 @@ export default function Profil() {
                       {annonce.vues ?? 0} vue{(annonce.vues ?? 0) > 1 ? "s" : ""}
                     </div>
                     <span className="text-xs text-gray-400 whitespace-nowrap">{new Date(annonce.created_at).toLocaleDateString("fr-FR")}</span>
+                    <span
+                      className={`flex items-center gap-1 text-xs whitespace-nowrap ${
+                        joursRestants(annonce) <= 5 ? "text-red-500 font-medium" : "text-gray-400"
+                      }`}
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Expire dans {joursRestants(annonce)} j
+                    </span>
                     <div className="flex items-center gap-2 ml-auto">
+                      <button
+                        onClick={() => renouvelerAnnonce(annonce.id)}
+                        disabled={renouvellement === annonce.id || renouvelableDans(annonce) > 0}
+                        title={
+                          renouvelableDans(annonce) > 0
+                            ? `Renouvelable dans ${renouvelableDans(annonce)} jour(s)`
+                            : "Relancer 30 jours de visibilité"
+                        }
+                        className="flex items-center gap-1.5 border border-green-100 hover:border-green-400 text-green-600 disabled:text-gray-300 disabled:border-gray-100 disabled:cursor-not-allowed px-3 py-2 rounded-full text-sm font-medium transition-colors"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${renouvellement === annonce.id ? "animate-spin" : ""}`} />
+                        Renouveler
+                      </button>
                       <Link href={`/mes-annonces/${annonce.id}/modifier`} className="flex items-center gap-1.5 border border-gray-200 hover:border-gray-400 text-gray-600 px-3 py-2 rounded-full text-sm font-medium transition-colors">
                         <Pencil className="w-4 h-4" />
                         Modifier

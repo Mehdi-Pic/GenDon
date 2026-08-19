@@ -425,6 +425,37 @@ def modifier_annonce(
     return annonce
 
 
+# Une annonce vit 30 jours ; elle est renouvelable une fois passe ce delai d'anciennete
+DUREE_VIE_JOURS = 30
+RENOUVELABLE_APRES_JOURS = 7
+
+
+@app.post("/annonces/{annonce_id}/renouveler", response_model=schemas.AnnonceResponse)
+def renouveler_annonce(
+    annonce_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Relance les 30 jours de visibilite d'une annonce (le proprietaire est toujours actif)."""
+    annonce = db.query(models.Annonce).filter(models.Annonce.id == annonce_id).first()
+    if not annonce:
+        raise HTTPException(status_code=404, detail="Annonce introuvable")
+    verifier_proprietaire(annonce, user_id)
+
+    age_jours = (datetime.now(timezone.utc) - annonce.created_at).days
+    if age_jours < RENOUVELABLE_APRES_JOURS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Renouvelable dans {RENOUVELABLE_APRES_JOURS - age_jours} jour(s)",
+        )
+
+    annonce.created_at = datetime.now(timezone.utc)
+    annonce.rappel_envoye = False  # le rappel J-3 pourra repartir sur le nouveau cycle
+    db.commit()
+    db.refresh(annonce)
+    return annonce
+
+
 @app.post("/annonces/{annonce_id}/vue")
 def compter_vue(
     annonce_id: int,

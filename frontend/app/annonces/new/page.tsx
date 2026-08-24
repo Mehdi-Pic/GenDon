@@ -184,6 +184,10 @@ export default function NewAnnonce() {
               {errors.quartier && <p className="text-red-500 text-xs mt-1">{errors.quartier}</p>}
             </div>
           </div>
+          <p className="text-xs text-gray-500 bg-gray-50 rounded-xl px-4 py-3 leading-relaxed">
+            Votre annonce reste en ligne <strong>30 jours</strong>, puis elle est supprimée automatiquement.
+            Vous pouvez la relancer à tout moment depuis <strong>Mon profil</strong>, onglet Mes annonces.
+          </p>
           {erreurSubmit && <p className="text-red-500 text-sm">{erreurSubmit}</p>}
           <button type="submit" disabled={loading || uploadEnCours} className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-2xl transition-colors text-base">
             {loading ? (

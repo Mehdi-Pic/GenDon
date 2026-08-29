@@ -204,9 +204,12 @@ def envoyer_rappels_expiration():
                           <p>Votre annonce :</p>
                           <p style="background:#f9fafb;border-left:3px solid #16a34a;padding:12px 16px;border-radius:4px;font-weight:600">{escape(annonce.titre)}</p>
                           <p>sera <strong>supprimée automatiquement dans 3 jours</strong> (les annonces GenDon restent en ligne 30 jours).</p>
-                          <p style="margin-top:16px">Objet déjà donné ? Rien à faire, ou supprimez-la dès maintenant depuis
-                            <a href="{frontend}/profil" style="color:#16a34a">votre profil</a>.</p>
-                          <p>Toujours disponible ? Vous pourrez republier une annonce après sa suppression.</p>
+                          <p style="margin-top:16px"><strong>Toujours disponible ?</strong> Vous pouvez la relancer pour 30 jours
+                            depuis <strong>Mon profil</strong>, onglet Mes annonces, avec le bouton « Renouveler ».</p>
+                          <p style="margin-top:20px">
+                            <a href="{frontend}/profil" style="background:#16a34a;color:#fff;text-decoration:none;padding:11px 22px;border-radius:9999px;font-weight:600;display:inline-block">Renouveler mon annonce</a>
+                          </p>
+                          <p style="margin-top:16px">Objet déjà donné ? Rien à faire, elle disparaîtra toute seule.</p>
                           <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
                           <p style="color:#9ca3af;font-size:12px">GenDon · Dons gratuits entre habitants de Gennevilliers</p>
                         </div>

@@ -543,10 +543,12 @@ def lister_annonces(
         query = query.filter(models.Annonce.created_at >= datetime.now(timezone.utc) - timedelta(days=7))
     elif periode == "mois":
         query = query.filter(models.Annonce.created_at >= datetime.now(timezone.utc) - timedelta(days=30))
+    # L'id departage les created_at identiques : sans lui, deux pages successives
+    # pourraient repeter ou omettre une annonce
     if tri == "ancien":
-        query = query.order_by(models.Annonce.created_at.asc())
+        query = query.order_by(models.Annonce.created_at.asc(), models.Annonce.id.asc())
     else:
-        query = query.order_by(models.Annonce.created_at.desc())
+        query = query.order_by(models.Annonce.created_at.desc(), models.Annonce.id.desc())
     total = query.count()
     annonces = query.offset((page - 1) * LIMITE_PAR_PAGE).limit(LIMITE_PAR_PAGE).all()
     if user_id and annonces:
@@ -841,7 +843,7 @@ def admin_lister_annonces(
             | models.Annonce.description.ilike(terme, escape="\\")
             | models.Annonce.pseudo.ilike(terme, escape="\\")
         )
-    query = query.order_by(models.Annonce.created_at.desc())
+    query = query.order_by(models.Annonce.created_at.desc(), models.Annonce.id.desc())
     total = query.count()
     annonces = query.offset((page - 1) * LIMITE_PAR_PAGE).limit(LIMITE_PAR_PAGE).all()
     return {"annonces": annonces, "total": total, "pages": ceil(total / LIMITE_PAR_PAGE) if total > 0 else 1, "page": page}

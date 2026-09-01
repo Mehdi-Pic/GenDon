@@ -73,19 +73,24 @@ function SearchBar() {
 
 function CategoryNav() {
   const searchParams = useSearchParams()
+  const pathname = usePathname()
   const activeCat = searchParams.get("categorie")
+  // Aucune categorie n'est mise en avant hors de la liste : sur l'accueil,
+  // l'absence de parametre ne signifie pas que l'on filtre sur "Tout".
+  const surListe = pathname === "/annonces"
+  const toutActif = surListe && !activeCat
 
   return (
     <ul className="flex items-center justify-start lg:justify-center gap-0 overflow-x-auto no-scrollbar">
       <li className="relative group flex items-center shrink-0">
-        <Link href="/annonces" className={`block px-2.5 sm:px-5 py-2.5 sm:py-4 text-sm sm:text-lg transition-colors whitespace-nowrap font-medium ${!activeCat ? "text-gray-900" : "text-gray-500 hover:text-gray-900"}`}>
+        <Link href="/annonces" className={`block px-2.5 sm:px-5 py-2.5 sm:py-4 text-sm sm:text-lg transition-colors whitespace-nowrap font-medium ${toutActif ? "text-gray-900" : "text-gray-500 hover:text-gray-900"}`}>
           Tout
         </Link>
         <span className="text-gray-200 text-xs" aria-hidden="true">·</span>
-        <span className={`absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 bg-gray-900 transition-all duration-300 ease-out ${!activeCat ? "w-full" : "w-0 group-hover:w-full"}`} />
+        <span className={`absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 bg-gray-900 transition-all duration-300 ease-out ${toutActif ? "w-full" : "w-0 group-hover:w-full"}`} />
       </li>
       {categories.map((cat, index) => {
-        const isActive = activeCat === cat
+        const isActive = surListe && activeCat === cat
         return (
           <li key={cat} className="relative group flex items-center shrink-0">
             <Link href={`/annonces?categorie=${encodeURIComponent(cat)}`} className={`block px-2.5 sm:px-5 py-2.5 sm:py-4 text-sm sm:text-lg transition-colors whitespace-nowrap font-medium ${isActive ? "text-gray-900" : "text-gray-500 hover:text-gray-900"}`}>

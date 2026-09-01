@@ -92,3 +92,10 @@ class Message(Base):
     lu = Column(Boolean, nullable=False, default=False, server_default="false")
     systeme = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class DesabonnementNewsletter(Base):
+    __tablename__ = "desabonnements_newsletter"
+
+    id = Column(Integer, primary_key=True, index=True)
+    clerk_user_id = Column(String(100), nullable=False, unique=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

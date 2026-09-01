@@ -12,3 +12,4 @@ resend==2.30.1
 pydantic==2.13.4
 apscheduler==3.11.0
 svix==1.42.0
+tzdata==2025.2

@@ -8,6 +8,9 @@ export default function Footer() {
           © {new Date().getFullYear()} <span className="font-semibold text-gray-600">Gen<span className="text-green-600">Don</span></span> · Dons gratuits entre habitants de Gennevilliers
         </p>
         <nav className="flex items-center gap-6">
+          <Link href="/contact" className="text-sm text-gray-400 hover:text-gray-900 transition-colors">
+            Contact
+          </Link>
           <Link href="/mentions-legales" className="text-sm text-gray-400 hover:text-gray-900 transition-colors">
             Mentions légales
           </Link>

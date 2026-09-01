@@ -55,12 +55,12 @@ export default function AdminAnnonces() {
 
   return (
     <div>
-      <h1 className="text-2xl font-black text-gray-900 mb-1">Annonces</h1>
+      <h1 className="text-xl sm:text-2xl font-black text-gray-900 mb-1">Annonces</h1>
       <p className="text-sm text-gray-400 mb-6">{total} annonce{total > 1 ? "s" : ""} en ligne</p>
 
       <form
         onSubmit={(e) => { e.preventDefault(); setPage(1); charger(1, recherche) }}
-        className="relative mb-6 max-w-md"
+        className="relative mb-5 sm:mb-6 sm:max-w-md"
       >
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
         <input
@@ -79,7 +79,7 @@ export default function AdminAnnonces() {
       ) : (
         <div className="flex flex-col gap-3">
           {annonces.map((a) => (
-            <div key={a.id} className="flex flex-wrap items-center gap-3 bg-white ring-1 ring-gray-100 rounded-2xl p-3">
+            <div key={a.id} className="flex items-center gap-3 bg-white ring-1 ring-gray-100 rounded-2xl p-2.5 sm:p-3">
               {a.images && a.images.length > 0 ? (
                 <img src={vignette(a.images[0], 200)} alt="" className="w-14 h-14 object-cover rounded-xl shrink-0" />
               ) : (
@@ -87,21 +87,23 @@ export default function AdminAnnonces() {
               )}
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-gray-900 truncate text-sm">{a.titre}</p>
-                <p className="text-xs text-gray-400 truncate">
-                  @{a.pseudo} · {a.quartier} · {new Date(a.created_at).toLocaleDateString("fr-FR")} ·{" "}
-                  <Eye className="w-3 h-3 inline -mt-0.5" /> {a.vues ?? 0}
+                <p className="text-xs text-gray-400 truncate">@{a.pseudo} · {a.quartier}</p>
+                <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                  {new Date(a.created_at).toLocaleDateString("fr-FR")}
+                  <span className="inline-flex items-center gap-1"><Eye className="w-3 h-3" />{a.vues ?? 0}</span>
                 </p>
               </div>
-              <div className="flex items-center gap-2 ml-auto">
+              <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                 <Link href={`/annonces/${a.id}`} target="_blank" className="p-2 text-gray-400 hover:text-gray-900 transition-colors" aria-label="Voir l'annonce">
                   <ExternalLink className="w-4 h-4" />
                 </Link>
                 <button
                   onClick={() => supprimer(a)}
-                  className="flex items-center gap-1.5 border border-red-100 hover:border-red-300 text-red-500 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                  aria-label={`Supprimer l'annonce ${a.titre}`}
+                  className="flex items-center gap-1.5 border border-red-100 hover:border-red-300 text-red-500 p-2 sm:px-3 sm:py-1.5 rounded-full text-xs font-medium transition-colors"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Supprimer
+                  <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                  <span className="hidden sm:inline">Supprimer</span>
                 </button>
               </div>
             </div>

@@ -64,7 +64,7 @@ export default function AdminSignalements() {
 
   return (
     <div>
-      <h1 className="text-2xl font-black text-gray-900 mb-1">Signalements</h1>
+      <h1 className="text-xl sm:text-2xl font-black text-gray-900 mb-1">Signalements</h1>
       <p className="text-sm text-gray-400 mb-6">{enAttente} en attente de traitement</p>
 
       {loading ? (
@@ -93,7 +93,7 @@ export default function AdminSignalements() {
               </div>
               <p className="text-sm text-gray-600 bg-gray-50 rounded-xl px-3 py-2 mb-3">{s.raison}</p>
               {!s.traite && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => marquerTraite(s.id)}
                     className="flex items-center gap-1.5 border border-gray-200 hover:border-gray-400 text-gray-600 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"

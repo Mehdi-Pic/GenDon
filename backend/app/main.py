@@ -506,6 +506,15 @@ def créer_annonce(
     return db_annonce
 
 
+@app.get("/stats")
+def stats_publiques(db: Session = Depends(get_db)):
+    """Chiffres affiches sur la page d'accueil : deux COUNT, pas de donnees personnelles."""
+    return {
+        "annonces": db.query(models.Annonce).filter(models.Annonce.donne_at == None).count(),
+        "dons_realises": db.query(models.DonRealise).count(),
+    }
+
+
 LIMITE_PAR_PAGE = 18
 
 @app.get("/annonces", response_model=schemas.AnnoncesPaginées)

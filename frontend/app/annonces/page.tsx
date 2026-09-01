@@ -79,10 +79,10 @@ export default async function Annonces({ searchParams }: { searchParams: Promise
 
   return (
     <main>
-      <div className="max-w-6xl mx-auto px-6 py-10">
-        <div className="flex items-center justify-between mb-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <div className="flex items-center justify-between gap-3 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-2xl font-black text-gray-900">
+            <h1 className="text-xl sm:text-2xl font-black text-gray-900">
               {recherche ? `Résultats pour "${recherche}"` : categorie ? categorie : "Les dons disponibles"}
             </h1>
             <p className="text-sm text-gray-500 mt-1">{total} objet{total > 1 ? "s" : ""} à donner à Gennevilliers</p>
@@ -108,7 +108,7 @@ export default async function Annonces({ searchParams }: { searchParams: Promise
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
               {annonces.map((annonce) => (
                 <AnnonceCard key={annonce.id} annonce={annonce} />
               ))}

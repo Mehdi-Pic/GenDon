@@ -41,7 +41,7 @@ export default function AdminJournal() {
 
   return (
     <div>
-      <h1 className="text-2xl font-black text-gray-900 mb-1">Journal de modération</h1>
+      <h1 className="text-xl sm:text-2xl font-black text-gray-900 mb-1">Journal de modération</h1>
       <p className="text-sm text-gray-400 mb-6">Les 200 dernières actions</p>
 
       {loading ? (

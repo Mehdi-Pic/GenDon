@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, useState, useEffect } from "react"
-import { Search, Plus, MessageCircle } from "lucide-react"
+import { Search, Plus, MessageCircle, User } from "lucide-react"
 import { useSearchParams, useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { SignInButton, Show, UserButton, useAuth } from "@clerk/nextjs"
@@ -78,7 +78,7 @@ function CategoryNav() {
   return (
     <ul className="flex items-center justify-start lg:justify-center gap-0 overflow-x-auto no-scrollbar">
       <li className="relative group flex items-center shrink-0">
-        <Link href="/annonces" className={`block px-3 sm:px-5 py-3 sm:py-4 text-base sm:text-lg transition-colors whitespace-nowrap font-medium ${!activeCat ? "text-gray-900" : "text-gray-500 hover:text-gray-900"}`}>
+        <Link href="/annonces" className={`block px-2.5 sm:px-5 py-2.5 sm:py-4 text-sm sm:text-lg transition-colors whitespace-nowrap font-medium ${!activeCat ? "text-gray-900" : "text-gray-500 hover:text-gray-900"}`}>
           Tout
         </Link>
         <span className="text-gray-200 text-xs" aria-hidden="true">·</span>
@@ -88,7 +88,7 @@ function CategoryNav() {
         const isActive = activeCat === cat
         return (
           <li key={cat} className="relative group flex items-center shrink-0">
-            <Link href={`/annonces?categorie=${encodeURIComponent(cat)}`} className={`block px-3 sm:px-5 py-3 sm:py-4 text-base sm:text-lg transition-colors whitespace-nowrap font-medium ${isActive ? "text-gray-900" : "text-gray-500 hover:text-gray-900"}`}>
+            <Link href={`/annonces?categorie=${encodeURIComponent(cat)}`} className={`block px-2.5 sm:px-5 py-2.5 sm:py-4 text-sm sm:text-lg transition-colors whitespace-nowrap font-medium ${isActive ? "text-gray-900" : "text-gray-500 hover:text-gray-900"}`}>
               {cat}
             </Link>
             {index < categories.length - 1 && (
@@ -103,17 +103,24 @@ function CategoryNav() {
 }
 
 export default function Header() {
+  const pathname = usePathname()
+  // Le panel d'administration a sa propre navigation : la recherche publique
+  // et les categories n'y servent a rien et coutent ~300px de hauteur sur mobile.
+  const dansAdmin = pathname.startsWith("/admin")
+
   return (
     <header className="bg-white/80 backdrop-blur-xl border-b border-gray-100 sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex flex-wrap items-center gap-3 sm:gap-6">
-        <Link href="/" aria-label="Accueil Gen Don" className="text-2xl sm:text-3xl font-black tracking-tight text-gray-900 shrink-0">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-5 flex flex-wrap items-center gap-2.5 sm:gap-6">
+        <Link href="/" aria-label="Accueil Gen Don" className="text-xl sm:text-3xl font-black tracking-tight text-gray-900 shrink-0">
           Gen<span className="text-green-600">Don</span>
         </Link>
-        <div className="order-3 w-full sm:order-0 sm:w-auto sm:flex-1">
-          <Suspense fallback={<div className="h-12 bg-gray-100 rounded-full w-full" />}>
-            <SearchBar />
-          </Suspense>
-        </div>
+        {!dansAdmin && (
+          <div className="order-3 w-full sm:order-0 sm:w-auto sm:flex-1">
+            <Suspense fallback={<div className="h-12 bg-gray-100 rounded-full w-full" />}>
+              <SearchBar />
+            </Suspense>
+          </div>
+        )}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
           <Show when="signed-out">
             <SignInButton mode="modal">
@@ -124,22 +131,27 @@ export default function Header() {
           </Show>
           <Show when="signed-in">
             <MessagesLink />
-            <Link href="/profil" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
-              Mon profil
+            <Link href="/profil" aria-label="Mon profil" className="flex items-center text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+              <User className="w-6 h-6 sm:hidden" aria-hidden="true" />
+              <span className="hidden sm:inline">Mon profil</span>
             </Link>
             <UserButton />
           </Show>
-          <Link href="/annonces/new" aria-label="Déposer un don" className="flex items-center gap-2 bg-green-600 hover:bg-green-500 hover:shadow-lg hover:shadow-green-200 text-white px-3.5 sm:px-6 py-3 rounded-full text-base font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-green-300">
+          <Link href="/annonces/new" aria-label="Déposer un don" className="flex items-center gap-2 bg-green-600 hover:bg-green-500 hover:shadow-lg hover:shadow-green-200 text-white px-3 sm:px-6 py-2.5 sm:py-3 rounded-full text-base font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-green-300">
             <Plus className="w-5 h-5" aria-hidden="true" />
             <span className="hidden sm:inline">Déposer un don</span>
           </Link>
         </div>
       </div>
-      <div className="px-2 sm:px-6">
-        <Suspense fallback={<div className="h-12" />}>
-          <CategoryNav />
-        </Suspense>
-      </div>
+      {!dansAdmin && (
+        <div className="relative px-2 sm:px-6">
+          <Suspense fallback={<div className="h-10 sm:h-12" />}>
+            <CategoryNav />
+          </Suspense>
+          {/* Signale que la liste defile horizontalement, invisible des qu'elle tient en entier */}
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white to-transparent lg:hidden" />
+        </div>
+      )}
     </header>
   )
 }

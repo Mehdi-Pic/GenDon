@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 import { Suspense } from "react"
+import { redirect } from "next/navigation"
 import Link from "next/link"
 import AnnonceCard from "../components/AnnonceCard"
 import FiltrePanel from "./FiltrePanel"
@@ -71,6 +72,10 @@ export default async function Annonces({ searchParams }: { searchParams: Promise
   const token = userId ? await getToken() : null
   const data = await getAnnonces(sp, token)
   const { annonces, total, pages } = data
+
+  // Page hors bornes (saisie a la main, lien perime) : on ramene sur la premiere,
+  // filtres conserves. urlPage omet le parametre pour la page 1, donc pas de boucle.
+  if (!Number.isInteger(page) || page < 1 || page > pages) redirect(urlPage(sp, 1))
 
   return (
     <main>

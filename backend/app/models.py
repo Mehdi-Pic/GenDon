@@ -17,6 +17,8 @@ class Annonce(Base):
     clerk_user_id = Column(String(100), nullable=True)
     vues = Column(Integer, nullable=False, default=0, server_default="0")
     rappel_envoye = Column(Boolean, nullable=False, default=False, server_default="false")
+    # Rempli quand le proprietaire declare l'objet donne : l'annonce est alors retiree du site sous 3 jours
+    donne_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class Favori(Base):
@@ -98,4 +100,14 @@ class DesabonnementNewsletter(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     clerk_user_id = Column(String(100), nullable=False, unique=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class DonRealise(Base):
+    """Trace durable d'un don abouti : survit à la suppression de l'annonce (compteur global)."""
+    __tablename__ = "dons_realises"
+
+    id = Column(Integer, primary_key=True, index=True)
+    clerk_user_id = Column(String(100), nullable=True)
+    titre = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

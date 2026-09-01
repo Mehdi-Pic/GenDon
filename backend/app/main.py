@@ -51,6 +51,15 @@ with engine.connect() as conn:
     if "rappel_envoye" not in colonnes:
         conn.execute(text("ALTER TABLE annonces ADD COLUMN rappel_envoye BOOLEAN NOT NULL DEFAULT FALSE"))
         conn.commit()
+    if "donne_at" not in colonnes:
+        conn.execute(text("ALTER TABLE annonces ADD COLUMN donne_at TIMESTAMPTZ"))
+        conn.commit()
+    # Le compteur demarre a 1 : un don avait deja abouti avant l'ajout de cette fonctionnalite
+    if sa_inspect(engine).has_table("dons_realises"):
+        deja = conn.execute(text("SELECT COUNT(*) FROM dons_realises")).scalar()
+        if not deja:
+            conn.execute(text("INSERT INTO dons_realises (titre) VALUES ('Don realise avant le suivi')"))
+            conn.commit()
     if sa_inspect(engine).has_table("conversations"):
         col_conv = [c["name"] for c in sa_inspect(engine).get_columns("conversations")]
         if "donneur_actif" not in col_conv:
@@ -152,11 +161,23 @@ def verifier_proprietaire(annonce: models.Annonce, user_id: str) -> None:
         raise HTTPException(status_code=403, detail="Vous n'êtes pas le propriétaire de cette annonce")
 
 
+# Une annonce declaree donnee reste visible pour son proprietaire quelques jours, puis disparait
+DELAI_RETRAIT_DON_JOURS = 3
+
+
 def purger_annonces_expirees():
     db = SessionLocal()
     try:
         limite = datetime.now(timezone.utc) - timedelta(days=30)
-        expirees = db.query(models.Annonce).filter(models.Annonce.created_at < limite).all()
+        limite_donnees = datetime.now(timezone.utc) - timedelta(days=DELAI_RETRAIT_DON_JOURS)
+        expirees = (
+            db.query(models.Annonce)
+            .filter(
+                (models.Annonce.created_at < limite)
+                | ((models.Annonce.donne_at != None) & (models.Annonce.donne_at < limite_donnees))
+            )
+            .all()
+        )
         for annonce in expirees:
             supprimer_images_cloudinary(annonce.images or [])
             db.delete(annonce)
@@ -180,7 +201,11 @@ def envoyer_rappels_expiration():
         limite = datetime.now(timezone.utc) - timedelta(days=27)
         a_rappeler = (
             db.query(models.Annonce)
-            .filter(models.Annonce.created_at < limite, models.Annonce.rappel_envoye == False)
+            .filter(
+                models.Annonce.created_at < limite,
+                models.Annonce.rappel_envoye == False,
+                models.Annonce.donne_at == None,
+            )
             .all()
         )
         if not a_rappeler:
@@ -286,6 +311,7 @@ def envoyer_newsletter_hebdo():
     try:
         annonces = (
             db.query(models.Annonce)
+            .filter(models.Annonce.donne_at == None)
             .order_by(models.Annonce.created_at.desc())
             .limit(5)
             .all()
@@ -495,7 +521,7 @@ def lister_annonces(
     user_id: str = Depends(get_user_id_optionnel),
 ):
     page = max(1, page)
-    query = db.query(models.Annonce)
+    query = db.query(models.Annonce).filter(models.Annonce.donne_at == None)
     if categorie:
         query = query.filter(models.Annonce.categorie == categorie)
     if recherche:
@@ -579,6 +605,8 @@ def modifier_annonce(
     if not annonce:
         raise HTTPException(status_code=404, detail="Annonce introuvable")
     verifier_proprietaire(annonce, user_id)
+    if annonce.donne_at:
+        raise HTTPException(status_code=400, detail="Cette annonce est cloturee")
     images_supprimees = set(annonce.images or []) - set(data.images or [])
     supprimer_images_cloudinary(list(images_supprimees))
     for key, value in data.model_dump().items():
@@ -604,6 +632,8 @@ def renouveler_annonce(
     if not annonce:
         raise HTTPException(status_code=404, detail="Annonce introuvable")
     verifier_proprietaire(annonce, user_id)
+    if annonce.donne_at:
+        raise HTTPException(status_code=400, detail="Cette annonce est cloturee")
 
     age_jours = (datetime.now(timezone.utc) - annonce.created_at).days
     if age_jours < RENOUVELABLE_APRES_JOURS:
@@ -614,6 +644,28 @@ def renouveler_annonce(
 
     annonce.created_at = datetime.now(timezone.utc)
     annonce.rappel_envoye = False  # le rappel J-3 pourra repartir sur le nouveau cycle
+    db.commit()
+    db.refresh(annonce)
+    return annonce
+
+
+@app.post("/annonces/{annonce_id}/donne", response_model=schemas.AnnonceResponse)
+def declarer_don(
+    annonce_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Le proprietaire declare l'objet donne : l'annonce quitte le site et le don est comptabilise."""
+    annonce = db.query(models.Annonce).filter(models.Annonce.id == annonce_id).first()
+    if not annonce:
+        raise HTTPException(status_code=404, detail="Annonce introuvable")
+    verifier_proprietaire(annonce, user_id)
+    if annonce.donne_at:
+        raise HTTPException(status_code=400, detail="Ce don est deja enregistre")
+
+    annonce.donne_at = datetime.now(timezone.utc)
+    # Trace independante de l'annonce : le compteur survit a la purge des 3 jours
+    db.add(models.DonRealise(clerk_user_id=user_id, titre=annonce.titre[:100]))
     db.commit()
     db.refresh(annonce)
     return annonce
@@ -768,6 +820,7 @@ def admin_stats(db: Session = Depends(get_db), acteur: dict = Depends(exiger_mod
         "annonces_semaine": db.query(models.Annonce).filter(models.Annonce.created_at >= il_y_a_7_jours).count(),
         "vues_totales": db.query(func.coalesce(func.sum(models.Annonce.vues), 0)).scalar(),
         "favoris": db.query(models.Favori).count(),
+        "dons_realises": db.query(models.DonRealise).count(),
         "signalements_en_attente": db.query(models.Signalement).filter(models.Signalement.traite == False).count(),
     }
 
@@ -1010,6 +1063,8 @@ async def demarrer_conversation(
         raise HTTPException(status_code=400, detail="Impossible de contacter ce donneur")
     if annonce.clerk_user_id == user_id:
         raise HTTPException(status_code=400, detail="Vous ne pouvez pas contacter votre propre annonce")
+    if annonce.donne_at:
+        raise HTTPException(status_code=400, detail="Cet objet a deja ete donne")
 
     existante = (
         db.query(models.Conversation)

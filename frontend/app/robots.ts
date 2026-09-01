@@ -5,7 +5,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/profil", "/mes-annonces", "/admin", "/messages"],
+      disallow: ["/profil", "/mes-annonces", "/admin", "/messages", "/desabonnement"],
     },
     sitemap: "https://www.gendon.fr/sitemap.xml",
   }

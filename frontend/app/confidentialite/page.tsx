@@ -33,6 +33,11 @@ export default function Confidentialite() {
               affichés publiquement sur le site.
             </li>
             <li>
+              <strong>Lettre d&apos;information</strong> : votre adresse email est utilisée pour vous envoyer,
+              chaque semaine, un récapitulatif des derniers dons publiés. Vous pouvez vous désabonner à tout
+              moment via le lien présent en bas de chaque envoi, sans que cela affecte votre compte.
+            </li>
+            <li>
               <strong>Messages de contact</strong> : lorsque vous contactez un donneur, votre message et
               votre adresse email sont transmis par email au donneur afin qu&apos;il puisse vous répondre.
               Les messages ne sont pas conservés par GenDon.

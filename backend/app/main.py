@@ -1331,6 +1331,8 @@ class MessageContactSite(PydanticBase):
     email: str = Field(min_length=5, max_length=120)
     sujet: str = Field(min_length=3, max_length=120)
     message: str = Field(min_length=10, max_length=2000)
+    # Champ piege : invisible pour un humain, souvent rempli par les robots
+    site_web: str = Field(default="", max_length=200)
 
 
 def _emails_equipe(db: Session) -> list:
@@ -1358,6 +1360,10 @@ def contacter_equipe(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_user_id_optionnel),
 ):
+    # Robot detecte : on fait comme si tout s'etait bien passe, sans rien envoyer
+    if data.site_web.strip():
+        return {"ok": True}
+
     expediteur = data.email.strip()
     if "@" not in expediteur or "." not in expediteur.split("@")[-1]:
         raise HTTPException(status_code=400, detail="Adresse email invalide")

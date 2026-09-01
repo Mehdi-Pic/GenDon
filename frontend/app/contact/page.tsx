@@ -10,6 +10,7 @@ export default function Contact() {
   const [email, setEmail] = useState("")
   const [sujet, setSujet] = useState("")
   const [message, setMessage] = useState("")
+  const [siteWeb, setSiteWeb] = useState("") // champ piege anti-robots
   const [etat, setEtat] = useState<"idle" | "envoi" | "succes">("idle")
   const [erreur, setErreur] = useState("")
   const [prerempli, setPrerempli] = useState(false)
@@ -29,7 +30,7 @@ export default function Contact() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/contact`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nom, email, sujet, message }),
+        body: JSON.stringify({ nom, email, sujet, message, site_web: siteWeb }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -119,6 +120,20 @@ export default function Contact() {
               className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-500 resize-none"
             />
             <p className="text-xs text-gray-400 mt-1">{message.length}/2000 caractères</p>
+          </div>
+
+          {/* Piege a robots : hors ecran, hors navigation clavier et ignore par les lecteurs d'ecran */}
+          <div aria-hidden="true" className="absolute -left-[9999px] w-px h-px overflow-hidden">
+            <label htmlFor="site_web">Ne pas remplir ce champ</label>
+            <input
+              id="site_web"
+              name="site_web"
+              type="text"
+              tabIndex={-1}
+              autoComplete="off"
+              value={siteWeb}
+              onChange={(e) => setSiteWeb(e.target.value)}
+            />
           </div>
 
           {erreur && <p className="text-red-500 text-sm">{erreur}</p>}

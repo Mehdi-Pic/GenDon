@@ -3,32 +3,38 @@ import Link from "next/link"
 import AnnonceCard from "./components/AnnonceCard"
 import { QUARTIERS, type Annonce } from "./lib/annonces"
 
-// La page d'accueil montre des donnees reelles : on la regenere toutes les 5 minutes
-// plutot qu'a chaque visite, pour garder un affichage instantane.
-export const revalidate = 300
+// Les chiffres et les dernieres annonces doivent refleter l'etat reel du site :
+// on rend a chaque visite plutot que de figer un instantane au moment du build,
+// qui restait faux jusqu'a la regeneration suivante.
+export const dynamic = "force-dynamic"
 
 type Accueil = { annonces: Annonce[]; disponibles: number; dons: number }
 
 async function getAccueil(): Promise<Accueil> {
   const base = process.env.NEXT_PUBLIC_API_URL
-  const vide: Accueil = { annonces: [], disponibles: 0, dons: 0 }
-  try {
-    const [resAnnonces, resStats] = await Promise.all([
-      fetch(`${base}/annonces`, { next: { revalidate: 300 } }),
-      fetch(`${base}/stats`, { next: { revalidate: 300 } }),
-    ])
-    if (!resAnnonces.ok || !resStats.ok) return vide
-    const liste = await resAnnonces.json()
-    const stats = await resStats.json()
-    return {
-      annonces: (liste.annonces ?? []).slice(0, 6),
-      disponibles: stats.annonces ?? 0,
-      dons: stats.dons_realises ?? 0,
-    }
-  } catch {
-    // L'accueil doit rester affichable meme si l'API est indisponible
-    return vide
+  let annonces: Annonce[] = []
+  let disponibles = 0
+  let dons = 0
+
+  // Les deux sources sont interrogees separement : la panne de l'une
+  // ne doit pas vider l'autre.
+  const [resListe, resStats] = await Promise.allSettled([
+    fetch(`${base}/annonces`, { cache: "no-store" }),
+    fetch(`${base}/stats`, { cache: "no-store" }),
+  ])
+
+  if (resListe.status === "fulfilled" && resListe.value.ok) {
+    const liste = await resListe.value.json()
+    annonces = (liste.annonces ?? []).slice(0, 6)
+    disponibles = liste.total ?? 0 // repli si /stats est indisponible
   }
+  if (resStats.status === "fulfilled" && resStats.value.ok) {
+    const stats = await resStats.value.json()
+    disponibles = stats.annonces ?? disponibles
+    dons = stats.dons_realises ?? 0
+  }
+
+  return { annonces, disponibles, dons }
 }
 
 export default async function Home() {

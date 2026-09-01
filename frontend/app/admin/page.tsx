@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react"
 import { useAuth } from "@clerk/nextjs"
-import { ClipboardList, Eye, Heart, Flag, TrendingUp } from "lucide-react"
+import { ClipboardList, Eye, Heart, Flag, TrendingUp, HandHeart } from "lucide-react"
 
 type Stats = {
   annonces: number
   annonces_semaine: number
   vues_totales: number
   favoris: number
+  dons_realises: number
   signalements_en_attente: number
 }
 
@@ -35,6 +36,7 @@ export default function AdminDashboard() {
     ? [
         { label: "Annonces en ligne", valeur: stats.annonces, Icon: ClipboardList },
         { label: "Publiées cette semaine", valeur: stats.annonces_semaine, Icon: TrendingUp },
+        { label: "Dons réalisés", valeur: stats.dons_realises, Icon: HandHeart },
         { label: "Vues cumulées", valeur: stats.vues_totales, Icon: Eye },
         { label: "Favoris", valeur: stats.favoris, Icon: Heart },
         { label: "Signalements à traiter", valeur: stats.signalements_en_attente, Icon: Flag, alerte: stats.signalements_en_attente > 0 },

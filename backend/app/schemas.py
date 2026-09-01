@@ -62,6 +62,7 @@ class AnnonceResponse(BaseModel):
     images: Optional[List[str]]
     statut: str
     created_at: datetime
+    donne_at: Optional[datetime] = None
     est_proprietaire: bool = False
     est_favori: bool = False
     vues: int = 0

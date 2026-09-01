@@ -3,7 +3,7 @@
 import { useUser, useAuth } from "@clerk/nextjs"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { MapPin, Pencil, Trash2, Eye, Heart, RefreshCw } from "lucide-react"
+import { MapPin, Pencil, Trash2, Eye, Heart, RefreshCw, HandHeart } from "lucide-react"
 import Link from "next/link"
 import AnnonceCard from "../components/AnnonceCard"
 import { vignette, type Annonce } from "../lib/annonces"
@@ -19,6 +19,7 @@ export default function Profil() {
   const [favoris, setFavoris] = useState<Annonce[]>([])
   const [loading, setLoading] = useState(true)
   const [renouvellement, setRenouvellement] = useState<number | null>(null)
+  const [don, setDon] = useState<number | null>(null)
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) router.replace("/")
@@ -86,6 +87,36 @@ export default function Profil() {
     }
   }
 
+  // Une annonce cloturee reste visible dans "Mes annonces" quelques jours avant d'etre retiree
+  const DELAI_RETRAIT_DON_JOURS = 3
+
+  function retraitDans(annonce: Annonce) {
+    if (!annonce.donne_at) return 0
+    const age = (Date.now() - new Date(annonce.donne_at).getTime()) / 86400000
+    return Math.max(0, Math.ceil(DELAI_RETRAIT_DON_JOURS - age))
+  }
+
+  async function declarerDon(id: number) {
+    if (!confirm("Confirmer que l'objet a été donné ? L'annonce sera retirée du site.")) return
+    setDon(id)
+    try {
+      const token = await getToken()
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}/donne`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.detail || "L'enregistrement a échoué. Réessayez.")
+        return
+      }
+      const maj: Annonce = await res.json()
+      setAnnonces((prev) => prev.map((a) => (a.id === id ? { ...a, donne_at: maj.donne_at } : a)))
+    } finally {
+      setDon(null)
+    }
+  }
+
   async function supprimerAnnonce(id: number) {
     if (!confirm("Supprimer cette annonce ?")) return
     const token = await getToken()
@@ -145,18 +176,37 @@ export default function Profil() {
           ) : (
             <div className="flex flex-col gap-4">
               {annonces.map((annonce) => (
-                <div key={annonce.id} className="flex flex-wrap items-center gap-4 bg-white ring-1 ring-gray-100 rounded-3xl p-4 hover:ring-gray-200 hover:shadow-md transition-all">
+                <div
+                  key={annonce.id}
+                  className={`flex flex-wrap items-center gap-4 ring-1 rounded-3xl p-4 transition-all ${
+                    annonce.donne_at
+                      ? "bg-gray-50 ring-gray-100"
+                      : "bg-white ring-gray-100 hover:ring-gray-200 hover:shadow-md"
+                  }`}
+                >
                   {annonce.images && annonce.images.length > 0 ? (
-                    <img src={vignette(annonce.images[0], 200)} alt={annonce.titre} className="w-20 h-20 object-cover rounded-xl shrink-0" />
+                    <img
+                      src={vignette(annonce.images[0], 200)}
+                      alt={annonce.titre}
+                      className={`w-20 h-20 object-cover rounded-xl shrink-0 ${annonce.donne_at ? "grayscale opacity-60" : ""}`}
+                    />
                   ) : (
                     <div className="w-20 h-20 bg-gray-100 rounded-xl shrink-0 flex items-center justify-center">
                       <span className="text-gray-400 text-xs">Pas de photo</span>
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <h2 className="text-gray-900 font-bold truncate">{annonce.titre}</h2>
-                    <p className="text-gray-500 text-sm line-clamp-1 mt-0.5">{annonce.description}</p>
-                    <span className="inline-block text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full mt-2">{annonce.categorie}</span>
+                    <h2 className={`font-bold truncate ${annonce.donne_at ? "text-gray-400" : "text-gray-900"}`}>{annonce.titre}</h2>
+                    <p className={`text-sm line-clamp-1 mt-0.5 ${annonce.donne_at ? "text-gray-400" : "text-gray-500"}`}>{annonce.description}</p>
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <span className="inline-block text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{annonce.categorie}</span>
+                      {annonce.donne_at && (
+                        <span className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 font-medium px-2 py-0.5 rounded-full">
+                          <HandHeart className="w-3 h-3" />
+                          Objet donné
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="w-full flex flex-wrap items-center gap-x-3 gap-y-2">
                     <div className="flex items-center gap-1 text-xs text-gray-400 whitespace-nowrap">
@@ -168,15 +218,24 @@ export default function Profil() {
                       {annonce.vues ?? 0} vue{(annonce.vues ?? 0) > 1 ? "s" : ""}
                     </div>
                     <span className="text-xs text-gray-400 whitespace-nowrap">{new Date(annonce.created_at).toLocaleDateString("fr-FR")}</span>
-                    <span
-                      className={`flex items-center gap-1 text-xs whitespace-nowrap ${
-                        joursRestants(annonce) <= 5 ? "text-red-500 font-medium" : "text-gray-400"
-                      }`}
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      Expire dans {joursRestants(annonce)} j
-                    </span>
+                    {annonce.donne_at ? (
+                      <span className="flex items-center gap-1 text-xs text-gray-400 whitespace-nowrap">
+                        <Trash2 className="w-3 h-3" />
+                        Retirée dans {retraitDans(annonce)} j
+                      </span>
+                    ) : (
+                      <span
+                        className={`flex items-center gap-1 text-xs whitespace-nowrap ${
+                          joursRestants(annonce) <= 5 ? "text-red-500 font-medium" : "text-gray-400"
+                        }`}
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Expire dans {joursRestants(annonce)} j
+                      </span>
+                    )}
                     <div className="flex items-center gap-2 ml-auto">
+                      {!annonce.donne_at && (
+                        <>
                       <button
                         onClick={() => renouvelerAnnonce(annonce.id)}
                         disabled={renouvellement === annonce.id || renouvelableDans(annonce) > 0}
@@ -194,6 +253,17 @@ export default function Profil() {
                         <Pencil className="w-4 h-4" />
                         Modifier
                       </Link>
+                      <button
+                        onClick={() => declarerDon(annonce.id)}
+                        disabled={don === annonce.id}
+                        title="L'objet a trouvé preneur : retirer l'annonce du site"
+                        className="flex items-center gap-1.5 bg-green-600 hover:bg-green-500 disabled:bg-green-300 text-white px-3 py-2 rounded-full text-sm font-medium transition-colors"
+                      >
+                        <HandHeart className="w-4 h-4" />
+                        Objet donné
+                      </button>
+                        </>
+                      )}
                       <button onClick={() => supprimerAnnonce(annonce.id)} className="flex items-center gap-1.5 border border-red-100 hover:border-red-300 text-red-500 px-3 py-2 rounded-full text-sm font-medium transition-colors">
                         <Trash2 className="w-4 h-4" />
                         Supprimer

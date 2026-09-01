@@ -17,6 +17,8 @@ export type Annonce = {
   pseudo: string
   images: string[]
   created_at: string
+  // Renseigne quand le proprietaire a declare l'objet donne : l'annonce est en cours de retrait
+  donne_at?: string | null
   est_proprietaire?: boolean
   est_favori?: boolean
   vues?: number

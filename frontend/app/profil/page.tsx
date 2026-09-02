@@ -97,7 +97,7 @@ export default function Profil() {
   }
 
   async function declarerDon(id: number) {
-    if (!confirm("Confirmer que l'objet a été donné ? L'annonce sera retirée du site.")) return
+    if (!confirm("Confirmer que l'objet a été donné ? Il sera comptabilisé dans les dons réalisés. Pour retirer l'annonce sans la compter comme un don, utilisez plutôt Supprimer.")) return
     setDon(id)
     try {
       const token = await getToken()
@@ -233,41 +233,56 @@ export default function Profil() {
                         Expire dans {joursRestants(annonce)} j
                       </span>
                     )}
-                    <div className="flex items-center gap-2 ml-auto">
+                    {/* Quatre actions ne tiennent pas sur une ligne de telephone :
+                        grille 2x2 sur mobile, rangee unique alignee a droite ensuite. */}
+                    <div className="w-full sm:w-auto sm:ml-auto grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
                       {!annonce.donne_at && (
                         <>
-                      <button
-                        onClick={() => renouvelerAnnonce(annonce.id)}
-                        disabled={renouvellement === annonce.id || renouvelableDans(annonce) > 0}
-                        title={
-                          renouvelableDans(annonce) > 0
-                            ? `Renouvelable dans ${renouvelableDans(annonce)} jour(s)`
-                            : "Relancer 30 jours de visibilité"
-                        }
-                        className="flex items-center gap-1.5 border border-green-100 hover:border-green-400 text-green-600 disabled:text-gray-300 disabled:border-gray-100 disabled:cursor-not-allowed px-3 py-2 rounded-full text-sm font-medium transition-colors"
-                      >
-                        <RefreshCw className={`w-4 h-4 ${renouvellement === annonce.id ? "animate-spin" : ""}`} />
-                        Renouveler
-                      </button>
-                      <Link href={`/mes-annonces/${annonce.id}/modifier`} className="flex items-center gap-1.5 border border-gray-200 hover:border-gray-400 text-gray-600 px-3 py-2 rounded-full text-sm font-medium transition-colors">
-                        <Pencil className="w-4 h-4" />
-                        Modifier
-                      </Link>
-                      <button
-                        onClick={() => declarerDon(annonce.id)}
-                        disabled={don === annonce.id}
-                        title="L'objet a trouvé preneur : retirer l'annonce du site"
-                        className="flex items-center gap-1.5 bg-green-600 hover:bg-green-500 disabled:bg-green-300 text-white px-3 py-2 rounded-full text-sm font-medium transition-colors"
-                      >
-                        <HandHeart className="w-4 h-4" />
-                        Objet donné
-                      </button>
+                          <button
+                            onClick={() => renouvelerAnnonce(annonce.id)}
+                            disabled={renouvellement === annonce.id || renouvelableDans(annonce) > 0}
+                            title={
+                              renouvelableDans(annonce) > 0
+                                ? `Renouvelable dans ${renouvelableDans(annonce)} jour(s)`
+                                : "Relancer 30 jours de visibilité"
+                            }
+                            className="flex items-center justify-center gap-1.5 border border-green-100 hover:border-green-400 text-green-600 disabled:text-gray-300 disabled:border-gray-100 disabled:cursor-not-allowed px-3 py-2 rounded-full text-sm font-medium transition-colors"
+                          >
+                            <RefreshCw className={`w-4 h-4 ${renouvellement === annonce.id ? "animate-spin" : ""}`} />
+                            Renouveler
+                          </button>
+                          <Link href={`/mes-annonces/${annonce.id}/modifier`} className="flex items-center justify-center gap-1.5 border border-gray-200 hover:border-gray-400 text-gray-600 px-3 py-2 rounded-full text-sm font-medium transition-colors">
+                            <Pencil className="w-4 h-4" />
+                            Modifier
+                          </Link>
+                          <button
+                            onClick={() => supprimerAnnonce(annonce.id)}
+                            title="Retirer l'annonce sans la comptabiliser comme un don"
+                            className="flex items-center justify-center gap-1.5 border border-red-100 hover:border-red-300 text-red-500 px-3 py-2 rounded-full text-sm font-medium transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Supprimer
+                          </button>
+                          <button
+                            onClick={() => declarerDon(annonce.id)}
+                            disabled={don === annonce.id}
+                            title="L'objet a trouvé preneur : retirer l'annonce du site"
+                            className="flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-500 disabled:bg-green-300 text-white px-3 py-2 rounded-full text-sm font-medium transition-colors"
+                          >
+                            <HandHeart className="w-4 h-4" />
+                            Objet donné
+                          </button>
                         </>
                       )}
-                      <button onClick={() => supprimerAnnonce(annonce.id)} className="flex items-center gap-1.5 border border-red-100 hover:border-red-300 text-red-500 px-3 py-2 rounded-full text-sm font-medium transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                        Supprimer
-                      </button>
+                      {annonce.donne_at && (
+                        <button
+                          onClick={() => supprimerAnnonce(annonce.id)}
+                          className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 border border-red-100 hover:border-red-300 text-red-500 px-3 py-2 rounded-full text-sm font-medium transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Supprimer
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

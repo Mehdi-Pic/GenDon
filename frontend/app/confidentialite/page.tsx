@@ -35,7 +35,7 @@ export default function Confidentialite() {
             <li>
               <strong>Lettre d&apos;information</strong> : votre adresse email est utilisée pour vous envoyer,
               chaque semaine, un récapitulatif des derniers dons publiés. Vous pouvez vous désabonner à tout
-              moment via le lien présent en bas de chaque envoi, sans que cela affecte votre compte.
+              moment via le lien présent en bas de chaque envoi ou depuis Mon profil, sans que cela affecte votre compte.
             </li>
             <li>
               <strong>Messagerie</strong> : les messages échangés entre un donneur et un intéressé sont
@@ -59,7 +59,8 @@ export default function Confidentialite() {
           <p className="text-gray-600 leading-relaxed mt-3">
             La lettre d&apos;information hebdomadaire repose sur l&apos;intérêt légitime de GenDon à faire
             connaître les dons disponibles à ses membres (art. 6.1.f du RGPD). Vous pouvez vous y opposer
-            à tout moment, sans justification, via le lien de désabonnement présent dans chaque envoi.
+            à tout moment, sans justification, via le lien de désabonnement présent dans chaque envoi
+            ou depuis Mon profil.
           </p>
         </section>
 

@@ -60,7 +60,7 @@ function Desabonnement() {
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Vous êtes désabonné</h1>
       <p className="text-gray-500 mb-8">
         Vous ne recevrez plus l&apos;email hebdomadaire des derniers dons. Votre compte et vos annonces
-        ne sont pas affectés.
+        ne sont pas affectés. Vous pourrez vous réabonner à tout moment depuis Mon profil.
       </p>
       <Link href="/annonces" className="bg-gray-900 hover:bg-gray-700 text-white px-6 py-3 rounded-full font-semibold transition-colors">
         Voir les dons

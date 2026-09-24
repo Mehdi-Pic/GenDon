@@ -53,8 +53,19 @@ Navigateur ─▶ Next.js (Vercel) ─▶ API FastAPI (Railway) ─▶ PostgreSQ
 
 L'authentification repose sur la **vérification des tokens JWT de Clerk côté serveur** (JWKS / RS256). Les endpoints publics utilisent une authentification optionnelle qui permet de calculer côté serveur les informations propres à l'utilisateur (ses annonces, ses favoris) sans qu'elles soient falsifiables par le client.
 
+## Tests
+
+Les tests du backend (pytest) tournent automatiquement sur GitHub Actions à chaque pull request,
+avec une base Postgres jetable. Pour les lancer en local, il faut une base Postgres **dédiée**
+(les tests la vident à chaque exécution ; une adresse Railway est refusée) :
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gendon_test pytest
+```
+
 ## Pistes d'amélioration
 
 - Suivi d'erreurs (Sentry)
-- Tests automatisés (pytest / CI)
 - Compatibilité Mac

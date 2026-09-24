@@ -124,7 +124,7 @@ export default async function Home() {
 
       <section className="border-t border-gray-100">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
-          <div className="flex sm:flex-col items-center sm:text-center text-left gap-4 sm:gap-0 bg-gray-50 rounded-3xl p-5 sm:p-8 hover:bg-green-50/60 sm:hover:-translate-y-1 transition-all duration-300">
+          <div className="flex sm:flex-col items-center sm:text-center text-left gap-4 sm:gap-0 bg-gray-50 rounded-3xl p-5 sm:p-8">
             <div className="w-12 h-12 bg-white shadow-sm rounded-2xl flex items-center justify-center shrink-0 sm:mx-auto sm:mb-4">
               <Heart className="w-6 h-6 text-green-600" />
             </div>
@@ -133,7 +133,7 @@ export default async function Home() {
               <p className="text-sm text-gray-500 leading-relaxed">Pas de frais, pas de commission. Les objets trouvent une nouvelle vie gratuitement.</p>
             </div>
           </div>
-          <div className="flex sm:flex-col items-center sm:text-center text-left gap-4 sm:gap-0 bg-gray-50 rounded-3xl p-5 sm:p-8 hover:bg-green-50/60 sm:hover:-translate-y-1 transition-all duration-300">
+          <div className="flex sm:flex-col items-center sm:text-center text-left gap-4 sm:gap-0 bg-gray-50 rounded-3xl p-5 sm:p-8">
             <div className="w-12 h-12 bg-white shadow-sm rounded-2xl flex items-center justify-center shrink-0 sm:mx-auto sm:mb-4">
               <MapPin className="w-6 h-6 text-green-600" />
             </div>
@@ -142,7 +142,7 @@ export default async function Home() {
               <p className="text-sm text-gray-500 leading-relaxed">Uniquement à Gennevilliers. Vos voisins, votre quartier, votre ville.</p>
             </div>
           </div>
-          <div className="flex sm:flex-col items-center sm:text-center text-left gap-4 sm:gap-0 bg-gray-50 rounded-3xl p-5 sm:p-8 hover:bg-green-50/60 sm:hover:-translate-y-1 transition-all duration-300">
+          <div className="flex sm:flex-col items-center sm:text-center text-left gap-4 sm:gap-0 bg-gray-50 rounded-3xl p-5 sm:p-8">
             <div className="w-12 h-12 bg-white shadow-sm rounded-2xl flex items-center justify-center shrink-0 sm:mx-auto sm:mb-4">
               <Zap className="w-6 h-6 text-green-600" />
             </div>

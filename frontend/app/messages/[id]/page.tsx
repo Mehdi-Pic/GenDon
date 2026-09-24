@@ -61,12 +61,19 @@ export default function Conversation({ params }: { params: Promise<{ id: string 
     }
   }, [id, getToken])
 
-  // Chargement initial + polling toutes les 5 s
+  // Chargement initial + polling toutes les 5 s. Les messages ne sont marqués lus que si
+  // l'onglet est visible : sinon un onglet oublié en arrière-plan empêcherait l'email de notification.
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return
-    charger(true)
-    const intervalle = setInterval(() => charger(true), 5000)
-    return () => clearInterval(intervalle)
+    const visible = () => document.visibilityState === "visible"
+    charger(visible())
+    const intervalle = setInterval(() => charger(visible()), 5000)
+    const auRetour = () => { if (visible()) charger(true) }
+    document.addEventListener("visibilitychange", auRetour)
+    return () => {
+      clearInterval(intervalle)
+      document.removeEventListener("visibilitychange", auRetour)
+    }
   }, [isLoaded, isSignedIn, charger])
 
   // Défiler en bas quand de nouveaux messages arrivent

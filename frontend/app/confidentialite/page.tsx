@@ -38,9 +38,10 @@ export default function Confidentialite() {
               moment via le lien présent en bas de chaque envoi, sans que cela affecte votre compte.
             </li>
             <li>
-              <strong>Messages de contact</strong> : lorsque vous contactez un donneur, votre message et
-              votre adresse email sont transmis par email au donneur afin qu&apos;il puisse vous répondre.
-              Les messages ne sont pas conservés par GenDon.
+              <strong>Messagerie</strong> : les messages échangés entre un donneur et un intéressé sont
+              conservés par GenDon pour permettre la conversation. Ils sont supprimés lorsque les deux
+              participants ont quitté la conversation, lorsque l&apos;annonce est supprimée, ou lors de la
+              suppression du compte. Vos adresses email ne sont jamais communiquées à l&apos;autre personne.
             </li>
           </ul>
           <p className="text-gray-600 leading-relaxed mt-3">
@@ -55,6 +56,11 @@ export default function Confidentialite() {
             du compte, publication des annonces, mise en relation entre donneurs et intéressés. La base
             légale est l&apos;exécution du service demandé par l&apos;utilisateur (art. 6.1.b du RGPD).
           </p>
+          <p className="text-gray-600 leading-relaxed mt-3">
+            La lettre d&apos;information hebdomadaire repose sur l&apos;intérêt légitime de GenDon à faire
+            connaître les dons disponibles à ses membres (art. 6.1.f du RGPD). Vous pouvez vous y opposer
+            à tout moment, sans justification, via le lien de désabonnement présent dans chaque envoi.
+          </p>
         </section>
 
         <section className="mb-8">
@@ -62,7 +68,7 @@ export default function Confidentialite() {
           <ul className="list-disc pl-5 text-gray-600 leading-relaxed flex flex-col gap-2">
             <li><strong>Clerk Inc.</strong> (États-Unis) : authentification et gestion des comptes.</li>
             <li><strong>Cloudinary Ltd.</strong> : hébergement des photos d&apos;annonces.</li>
-            <li><strong>Resend Inc.</strong> (États-Unis) : envoi des emails de mise en relation.</li>
+            <li><strong>Resend Inc.</strong> (États-Unis) : envoi des emails (notifications de messages, rappels d&apos;expiration, lettre d&apos;information).</li>
             <li><strong>Vercel Inc.</strong> et <strong>Railway Corp.</strong> (États-Unis) : hébergement du site et de la base de données.</li>
           </ul>
           <p className="text-gray-600 leading-relaxed mt-3">
@@ -74,7 +80,9 @@ export default function Confidentialite() {
         <section className="mb-8">
           <h2 className="text-xl font-bold text-gray-900 mb-3">Durées de conservation</h2>
           <ul className="list-disc pl-5 text-gray-600 leading-relaxed flex flex-col gap-2">
-            <li>Les <strong>annonces</strong> (textes et photos) sont automatiquement supprimées <strong>30 jours</strong> après leur publication, ou dès leur suppression par l&apos;utilisateur.</li>
+            <li>Les <strong>annonces</strong> (textes et photos) sont automatiquement supprimées <strong>30 jours</strong> après leur publication (ou leur dernier renouvellement), <strong>3 jours</strong> après avoir été déclarées données, ou dès leur suppression par l&apos;utilisateur.</li>
+            <li>Les <strong>photos envoyées mais jamais publiées</strong> sont supprimées sous 48 heures.</li>
+            <li>À la suppression du compte, les dons réalisés restent comptabilisés de façon anonyme (sans lien avec votre compte ni titre d&apos;annonce).</li>
             <li>Le <strong>compte utilisateur</strong> est conservé tant qu&apos;il est actif ; sa suppression peut être demandée à tout moment.</li>
           </ul>
         </section>

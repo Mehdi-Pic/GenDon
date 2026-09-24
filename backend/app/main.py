@@ -1,8 +1,9 @@
 # API Gen Don (déploiement Railway)
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text, inspect as sa_inspect
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel as PydanticBase, Field
 from . import models, schemas
 from .database import engine, get_db, SessionLocal
@@ -18,14 +19,13 @@ from math import ceil
 from html import escape
 from contextlib import asynccontextmanager
 from collections import defaultdict, deque
-from functools import partial
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from svix.webhooks import Webhook, WebhookVerificationError
-from fastapi.responses import HTMLResponse
 import hmac
 import hashlib
 import anyio.to_thread
+import threading
 import time
 import os
 
@@ -54,6 +54,9 @@ with engine.connect() as conn:
     if "donne_at" not in colonnes:
         conn.execute(text("ALTER TABLE annonces ADD COLUMN donne_at TIMESTAMPTZ"))
         conn.commit()
+    # La categorie "Immobilier" a ete renommee "Mobilier" (idempotent)
+    conn.execute(text("UPDATE annonces SET categorie = 'Mobilier' WHERE categorie = 'Immobilier'"))
+    conn.commit()
     # Le compteur demarre a 1 : un don avait deja abouti avant l'ajout de cette fonctionnalite
     if sa_inspect(engine).has_table("dons_realises"):
         deja = conn.execute(text("SELECT COUNT(*) FROM dons_realises")).scalar()
@@ -68,6 +71,14 @@ with engine.connect() as conn:
         if "demandeur_actif" not in col_conv:
             conn.execute(text("ALTER TABLE conversations ADD COLUMN demandeur_actif BOOLEAN NOT NULL DEFAULT TRUE"))
             conn.commit()
+    if sa_inspect(engine).has_table("signalements"):
+        type_raison = next(
+            (str(c["type"]) for c in sa_inspect(engine).get_columns("signalements") if c["name"] == "raison"), ""
+        )
+        # Les signalements de conversation ajoutent un prefixe : 500 caracteres ne suffisaient plus
+        if type_raison.upper().startswith("VARCHAR"):
+            conn.execute(text("ALTER TABLE signalements ALTER COLUMN raison TYPE TEXT"))
+            conn.commit()
     if sa_inspect(engine).has_table("messages"):
         col_msg = [c["name"] for c in sa_inspect(engine).get_columns("messages")]
         if "systeme" not in col_msg:
@@ -79,12 +90,18 @@ scheduler = BackgroundScheduler(daemon=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Les jobs sont définis plus bas (résolus au démarrage)
-    scheduler.add_job(purger_annonces_expirees, "interval", hours=24)
-    scheduler.add_job(envoyer_rappels_expiration, "interval", hours=24)
+    # Les jobs sont définis plus bas (résolus au démarrage).
+    # Horaires fixes (et non "toutes les 24 h") : un "interval" repart de zéro à chaque
+    # redéploiement, et ne s'exécuterait jamais si l'on déploie plus d'une fois par jour.
+    options = {"misfire_grace_time": 3600, "coalesce": True}
+    scheduler.add_job(purger_annonces_expirees, CronTrigger(hour=3, minute=0, timezone="Europe/Paris"), **options)
+    scheduler.add_job(purger_images_orphelines, CronTrigger(hour=3, minute=30, timezone="Europe/Paris"), **options)
+    scheduler.add_job(envoyer_rappels_expiration, CronTrigger(hour=10, minute=0, timezone="Europe/Paris"), **options)
+    scheduler.add_job(nettoyer_rate_limit, "interval", minutes=30)
     scheduler.add_job(
         envoyer_newsletter_hebdo,
         CronTrigger(day_of_week="thu", hour=18, minute=30, timezone="Europe/Paris"),
+        **options,
     )
     scheduler.start()
     yield
@@ -119,17 +136,44 @@ app.add_middleware(
 
 # Rate limiting en mémoire par utilisateur (1 seule instance Railway).
 _appels: dict = defaultdict(deque)
+_verrou_appels = threading.Lock()
+FENETRE_MAX_SECONDES = 3600  # plus grande fenêtre utilisée : sert au nettoyage
 
 
-def verifier_rate_limit(user_id: str, action: str, maximum: int, fenetre_secondes: int) -> None:
+def limite_atteinte(user_id: str, action: str, maximum: int, fenetre_secondes: int, poids: int = 1) -> bool:
+    """Enregistre `poids` appels et renvoie True (sans rien enregistrer) si la limite serait dépassée."""
     cle = f"{action}:{user_id}"
     maintenant = time.monotonic()
-    appels = _appels[cle]
-    while appels and maintenant - appels[0] > fenetre_secondes:
-        appels.popleft()
-    if len(appels) >= maximum:
+    with _verrou_appels:
+        appels = _appels[cle]
+        while appels and maintenant - appels[0] > fenetre_secondes:
+            appels.popleft()
+        if len(appels) + poids > maximum:
+            return True
+        appels.extend([maintenant] * poids)
+        return False
+
+
+def verifier_rate_limit(user_id: str, action: str, maximum: int, fenetre_secondes: int, poids: int = 1) -> None:
+    if limite_atteinte(user_id, action, maximum, fenetre_secondes, poids):
         raise HTTPException(status_code=429, detail="Trop de requêtes, réessayez plus tard")
-    appels.append(maintenant)
+
+
+def nettoyer_rate_limit():
+    """Retire les compteurs inactifs : sans cela le dictionnaire grossit indéfiniment."""
+    limite = time.monotonic() - FENETRE_MAX_SECONDES
+    with _verrou_appels:
+        for cle in [c for c, appels in _appels.items() if not appels or appels[-1] < limite]:
+            del _appels[cle]
+
+
+def ip_client(request: Request) -> str:
+    """IP réelle du visiteur. On prend la DERNIÈRE entrée de X-Forwarded-For, ajoutée par le proxy
+    Railway : la première peut être écrite librement par le client (contournement du rate limit)."""
+    transmis = request.headers.get("x-forwarded-for", "")
+    if transmis:
+        return transmis.split(",")[-1].strip()
+    return request.client.host if request.client else "inconnu"
 
 
 def echapper_like(terme: str) -> str:
@@ -153,7 +197,26 @@ def supprimer_images_cloudinary(urls: list) -> None:
     for url in urls:
         public_id = extraire_public_id(url)
         if public_id:
-            cloudinary.uploader.destroy(public_id)
+            try:
+                cloudinary.uploader.destroy(public_id)
+            except Exception:
+                pass  # image déjà absente ou Cloudinary indisponible : on ne bloque pas le reste
+
+
+def valider_images(db: Session, user_id: str, images: list, deja_presentes: list = ()) -> None:
+    """Une annonce ne peut contenir que des images envoyées par son auteur via /upload
+    (ou déjà présentes dans l'annonce). Empêche de référencer, puis faire supprimer,
+    les photos d'un autre utilisateur."""
+    nouvelles = set(images or []) - set(deja_presentes or [])
+    if not nouvelles:
+        return
+    connues = {
+        url for (url,) in db.query(models.ImageUploadee.url)
+        .filter(models.ImageUploadee.url.in_(nouvelles), models.ImageUploadee.clerk_user_id == user_id)
+        .all()
+    }
+    if nouvelles - connues:
+        raise HTTPException(status_code=400, detail="Image invalide : envoyez vos photos depuis le formulaire")
 
 
 def verifier_proprietaire(annonce: models.Annonce, user_id: str) -> None:
@@ -178,13 +241,43 @@ def purger_annonces_expirees():
             )
             .all()
         )
+        # Une annonce en erreur ne doit pas bloquer la purge des autres
         for annonce in expirees:
-            supprimer_images_cloudinary(annonce.images or [])
-            db.delete(annonce)
-        if expirees:
-            db.commit()
+            try:
+                images = list(annonce.images or [])
+                db.delete(annonce)
+                db.commit()
+                supprimer_images_cloudinary(images)
+            except Exception:
+                db.rollback()
     except Exception:
         db.rollback()
+    finally:
+        db.close()
+
+
+DELAI_IMAGE_ORPHELINE_JOURS = 2
+
+
+def purger_images_orphelines():
+    """Supprime les images envoyées mais jamais publiées (formulaire abandonné, photo retirée)
+    ou dont l'annonce a disparu."""
+    db = SessionLocal()
+    try:
+        limite = datetime.now(timezone.utc) - timedelta(days=DELAI_IMAGE_ORPHELINE_JOURS)
+        candidates = db.query(models.ImageUploadee).filter(models.ImageUploadee.created_at < limite).all()
+        for image in candidates:
+            try:
+                utilisee = (
+                    db.query(models.Annonce.id).filter(models.Annonce.images.any(image.url)).first() is not None
+                )
+                if utilisee:
+                    continue
+                db.delete(image)
+                db.commit()
+                supprimer_images_cloudinary([image.url])
+            except Exception:
+                db.rollback()
     finally:
         db.close()
 
@@ -264,8 +357,11 @@ def _vignette_email(url: str, largeur: int = 320) -> str:
     return url.replace("/upload/", f"/upload/w_{largeur},q_auto,f_auto/") if "/upload/" in url else url
 
 
-def _cle_desabonnement() -> bytes:
-    return (os.getenv("NEWSLETTER_SECRET") or os.getenv("CLERK_SECRET_KEY") or "gendon").encode()
+def _cle_desabonnement():
+    """Clé HMAC des liens de désabonnement. Pas de valeur par défaut : une clé connue
+    permettrait de forger un lien pour n'importe quel compte."""
+    cle = os.getenv("NEWSLETTER_SECRET") or os.getenv("CLERK_SECRET_KEY")
+    return cle.encode() if cle else None
 
 
 def _token_desabonnement(user_id: str) -> str:
@@ -274,22 +370,28 @@ def _token_desabonnement(user_id: str) -> str:
 
 
 def _verifier_token_desabonnement(token: str):
+    cle = _cle_desabonnement()
+    if not cle:
+        return None
     try:
         user_id, signature = token.rsplit(".", 1)
     except ValueError:
         return None
-    attendu = hmac.new(_cle_desabonnement(), user_id.encode(), hashlib.sha256).hexdigest()[:32]
+    attendu = hmac.new(cle, user_id.encode(), hashlib.sha256).hexdigest()[:32]
     return user_id if hmac.compare_digest(signature, attendu) else None
 
 
-def _tous_les_utilisateurs_clerk() -> list:
+MAX_UTILISATEURS_CLERK = 20000  # garde-fou contre une boucle infinie
+
+
+def _tous_les_utilisateurs_clerk(ordre: str = "-created_at") -> list:
     """Récupère tous les comptes Clerk (pagination par lots de 100)."""
     headers = {"Authorization": f"Bearer {os.getenv('CLERK_SECRET_KEY')}"}
     utilisateurs, offset = [], 0
-    while offset <= 2000:
+    while offset < MAX_UTILISATEURS_CLERK:
         try:
             r = httpx.get(
-                f"https://api.clerk.com/v1/users?limit=100&offset={offset}",
+                f"https://api.clerk.com/v1/users?limit=100&offset={offset}&order_by={ordre}",
                 headers=headers,
                 timeout=15,
             )
@@ -318,6 +420,9 @@ def envoyer_newsletter_hebdo():
         )
         if not annonces:
             return  # rien à annoncer, on n'envoie pas d'email vide
+
+        if not _cle_desabonnement():
+            return  # impossible de générer des liens de désabonnement valides
 
         desabonnes = {d.clerk_user_id for d in db.query(models.DesabonnementNewsletter).all()}
         utilisateurs = _tous_les_utilisateurs_clerk()
@@ -350,6 +455,7 @@ def envoyer_newsletter_hebdo():
             </table>
             """
 
+        envois = []
         for u in utilisateurs:
             uid = u.get("id")
             if not uid or uid in desabonnes:
@@ -358,49 +464,63 @@ def envoyer_newsletter_hebdo():
             if not email:
                 continue
             lien_desabo = f"{frontend}/desabonnement?token={_token_desabonnement(uid)}"
-            try:
-                resend.Emails.send({
-                    "from": f"GenDon <{os.getenv('RESEND_FROM_EMAIL', 'onboarding@resend.dev')}>",
-                    "to": [email],
-                    "subject": "Les derniers dons à Gennevilliers cette semaine",
-                    "headers": {"List-Unsubscribe": f"<{lien_desabo}>"},
-                    "html": f"""
-                    <div style="font-family:sans-serif;max-width:560px;margin:auto;color:#111">
-                      <p style="font-size:18px;font-weight:700;margin-bottom:4px">Les derniers dons près de chez vous</p>
-                      <p style="color:#6b7280;margin-top:0">via <strong>GenDon</strong> · Gennevilliers</p>
+            envois.append({
+                "from": f"GenDon <{os.getenv('RESEND_FROM_EMAIL', 'onboarding@resend.dev')}>",
+                "to": [email],
+                "subject": "Les derniers dons à Gennevilliers cette semaine",
+                "headers": {"List-Unsubscribe": f"<{lien_desabo}>"},
+                "html": f"""
+                <div style="font-family:sans-serif;max-width:560px;margin:auto;color:#111">
+                  <p style="font-size:18px;font-weight:700;margin-bottom:4px">Les derniers dons près de chez vous</p>
+                  <p style="color:#6b7280;margin-top:0">via <strong>GenDon</strong> · Gennevilliers</p>
 
-                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-                             style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:8px;margin:20px 0">
-                        <tr><td style="padding:14px 18px">
-                          <p style="margin:0;font-weight:600">Un objet qui ne vous sert plus ?</p>
-                          <p style="margin:6px 0 0;color:#374151;font-size:14px">
-                            Offrez-lui une seconde vie : déposez votre don en 2 minutes, c'est gratuit
-                            et il profitera à un habitant du quartier.
-                          </p>
-                          <p style="margin:14px 0 0">
-                            <a href="{frontend}/annonces/new"
-                               style="background:#16a34a;color:#fff;text-decoration:none;padding:10px 20px;border-radius:9999px;font-weight:600;display:inline-block;font-size:14px">Déposer un don</a>
-                          </p>
-                        </td></tr>
-                      </table>
-
-                      <p style="font-weight:700;margin-bottom:12px">Les 5 derniers dons publiés</p>
-                      {cartes}
-
-                      <p style="margin-top:20px">
-                        <a href="{frontend}/annonces" style="color:#16a34a;font-weight:600">Voir tous les dons disponibles</a>
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                         style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:8px;margin:20px 0">
+                    <tr><td style="padding:14px 18px">
+                      <p style="margin:0;font-weight:600">Un objet qui ne vous sert plus ?</p>
+                      <p style="margin:6px 0 0;color:#374151;font-size:14px">
+                        Offrez-lui une seconde vie : déposez votre don en 2 minutes, c'est gratuit
+                        et il profitera à un habitant du quartier.
                       </p>
-
-                      <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
-                      <p style="color:#9ca3af;font-size:12px">
-                        GenDon · Dons gratuits entre habitants de Gennevilliers<br/>
-                        <a href="{lien_desabo}" style="color:#9ca3af">Ne plus recevoir cet email</a>
+                      <p style="margin:14px 0 0">
+                        <a href="{frontend}/annonces/new"
+                           style="background:#16a34a;color:#fff;text-decoration:none;padding:10px 20px;border-radius:9999px;font-weight:600;display:inline-block;font-size:14px">Déposer un don</a>
                       </p>
-                    </div>
-                    """,
-                })
-            except Exception:
-                continue
+                    </td></tr>
+                  </table>
+
+                  <p style="font-weight:700;margin-bottom:12px">Les 5 derniers dons publiés</p>
+                  {cartes}
+
+                  <p style="margin-top:20px">
+                    <a href="{frontend}/annonces" style="color:#16a34a;font-weight:600">Voir tous les dons disponibles</a>
+                  </p>
+
+                  <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+                  <p style="color:#9ca3af;font-size:12px">
+                    GenDon · Dons gratuits entre habitants de Gennevilliers<br/>
+                    <a href="{lien_desabo}" style="color:#9ca3af">Ne plus recevoir cet email</a>
+                  </p>
+                </div>
+                """,
+            })
+
+        # Envoi par lots de 100 (API batch Resend) avec une pause entre les lots :
+        # un appel par destinataire dépassait la limite de débit et des emails étaient perdus.
+        # La clé d'idempotence évite un double envoi si la tâche est relancée le même jour.
+        jour = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        for i in range(0, len(envois), 100):
+            lot = envois[i:i + 100]
+            for tentative in range(3):
+                try:
+                    resend.Batch.send(
+                        lot,
+                        {"idempotency_key": f"newsletter-{jour}-{i}", "batch_validation": "permissive"},
+                    )
+                    break
+                except Exception:
+                    time.sleep(2 * (tentative + 1))
+            time.sleep(1)
     except Exception:
         pass
     finally:
@@ -414,16 +534,6 @@ def root():
 
 def purger_donnees_utilisateur(db: Session, clerk_user_id: str):
     """Efface toutes les données GenDon liées à un utilisateur (RGPD / suppression de compte)."""
-    annonces = db.query(models.Annonce).filter(models.Annonce.clerk_user_id == clerk_user_id).all()
-    for annonce in annonces:
-        supprimer_images_cloudinary(annonce.images or [])
-        db.delete(annonce)  # favoris et signalements liés partent en cascade
-    db.query(models.Favori).filter(models.Favori.clerk_user_id == clerk_user_id).delete()
-    db.query(models.Signalement).filter(models.Signalement.clerk_user_id == clerk_user_id).delete()
-    db.query(models.Role).filter(models.Role.clerk_user_id == clerk_user_id).delete()
-    db.query(models.DesabonnementNewsletter).filter(
-        models.DesabonnementNewsletter.clerk_user_id == clerk_user_id
-    ).delete()
     conversations = (
         db.query(models.Conversation)
         .filter(
@@ -432,13 +542,72 @@ def purger_donnees_utilisateur(db: Session, clerk_user_id: str):
         )
         .all()
     )
+    # Avant les annonces : leur suppression emporte déjà une partie des conversations en cascade
     for conv in conversations:
         db.delete(conv)  # messages liés partent en cascade
+    db.flush()
+    annonces = db.query(models.Annonce).filter(models.Annonce.clerk_user_id == clerk_user_id).all()
+    images = []
+    for annonce in annonces:
+        images.extend(annonce.images or [])
+        db.delete(annonce)  # favoris et signalements liés partent en cascade
+    # Images envoyées mais jamais publiées
+    images.extend(
+        url for (url,) in db.query(models.ImageUploadee.url)
+        .filter(models.ImageUploadee.clerk_user_id == clerk_user_id).all()
+    )
+    db.query(models.ImageUploadee).filter(models.ImageUploadee.clerk_user_id == clerk_user_id).delete()
+    # Le compteur global de dons est conservé, mais anonymisé
+    db.query(models.DonRealise).filter(models.DonRealise.clerk_user_id == clerk_user_id).update(
+        {models.DonRealise.clerk_user_id: None, models.DonRealise.titre: None}
+    )
+    db.query(models.Favori).filter(models.Favori.clerk_user_id == clerk_user_id).delete()
+    db.query(models.Signalement).filter(models.Signalement.clerk_user_id == clerk_user_id).delete()
+    db.query(models.Role).filter(models.Role.clerk_user_id == clerk_user_id).delete()
+    db.query(models.DesabonnementNewsletter).filter(
+        models.DesabonnementNewsletter.clerk_user_id == clerk_user_id
+    ).delete()
+    db.commit()
+    supprimer_images_cloudinary(list(set(images)))
+
+
+def _pseudo_depuis_clerk(user: dict) -> str:
+    return (user.get("username") or user.get("first_name") or "Un habitant")[:50]
+
+
+def mettre_a_jour_pseudo(db: Session, clerk_user_id: str, pseudo: str):
+    """Répercute un changement de nom d'utilisateur Clerk sur les annonces et conversations."""
+    db.query(models.Annonce).filter(models.Annonce.clerk_user_id == clerk_user_id).update(
+        {models.Annonce.pseudo: pseudo}
+    )
+    db.query(models.Conversation).filter(models.Conversation.donneur_id == clerk_user_id).update(
+        {models.Conversation.donneur_pseudo: pseudo}
+    )
+    db.query(models.Conversation).filter(models.Conversation.demandeur_id == clerk_user_id).update(
+        {models.Conversation.demandeur_pseudo: pseudo}
+    )
     db.commit()
 
 
+def _traiter_evenement_clerk(evenement: dict):
+    """Exécuté dans un thread avec sa propre session : le webhook est async (lecture du corps brut)."""
+    type_evenement = evenement.get("type")
+    data = evenement.get("data") or {}
+    uid = data.get("id")
+    if not uid:
+        return
+    db = SessionLocal()
+    try:
+        if type_evenement == "user.deleted":
+            purger_donnees_utilisateur(db, uid)
+        elif type_evenement == "user.updated":
+            mettre_a_jour_pseudo(db, uid, _pseudo_depuis_clerk(data))
+    finally:
+        db.close()
+
+
 @app.post("/webhooks/clerk")
-async def webhook_clerk(request: Request, db: Session = Depends(get_db)):
+async def webhook_clerk(request: Request):
     secret = os.getenv("CLERK_WEBHOOK_SECRET")
     if not secret:
         raise HTTPException(status_code=500, detail="Webhook non configuré")
@@ -454,10 +623,8 @@ async def webhook_clerk(request: Request, db: Session = Depends(get_db)):
     except WebhookVerificationError:
         raise HTTPException(status_code=401, detail="Signature invalide")
 
-    if evenement.get("type") == "user.deleted":
-        uid = (evenement.get("data") or {}).get("id")
-        if uid:
-            purger_donnees_utilisateur(db, uid)
+    # Accès base et Cloudinary synchrones : hors de l'event loop
+    await anyio.to_thread.run_sync(_traiter_evenement_clerk, evenement)
     return {"recu": True}
 
 
@@ -465,30 +632,33 @@ TYPES_IMAGE_AUTORISES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 TAILLE_MAX_IMAGE = 10 * 1024 * 1024  # 10 Mo
 
 
+# Fonction synchrone : FastAPI l'exécute dans un thread, Cloudinary et la base ne bloquent pas l'event loop
 @app.post("/upload")
-async def upload_images(
+def upload_images(
     files: List[UploadFile] = File(...),
+    db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    verifier_rate_limit(user_id, "upload", maximum=20, fenetre_secondes=3600)
     if len(files) > 5:
         raise HTTPException(status_code=400, detail="Maximum 5 photos par annonce")
+    # La limite compte les photos, pas les requêtes
+    verifier_rate_limit(user_id, "upload", maximum=30, fenetre_secondes=3600, poids=len(files))
     urls = []
     for file in files:
         if file.content_type not in TYPES_IMAGE_AUTORISES:
             raise HTTPException(status_code=400, detail="Seules les images JPEG, PNG, WebP et GIF sont acceptées")
-        contenu = await file.read()
+        contenu = file.file.read(TAILLE_MAX_IMAGE + 1)
         if len(contenu) > TAILLE_MAX_IMAGE:
             raise HTTPException(status_code=400, detail="Image trop volumineuse (max 10 Mo)")
-        # Appel Cloudinary synchrone → thread pour ne pas bloquer l'event loop
-        resultat = await anyio.to_thread.run_sync(
-            partial(
-                cloudinary.uploader.upload,
-                contenu,
-                folder="gendon",
-                transformation=[{"quality": "auto", "fetch_format": "auto"}],
-            )
+        resultat = cloudinary.uploader.upload(
+            contenu,
+            folder="gendon",
+            transformation=[{"quality": "auto", "fetch_format": "auto"}],
         )
+        db.add(models.ImageUploadee(
+            url=resultat["secure_url"], public_id=resultat["public_id"], clerk_user_id=user_id,
+        ))
+        db.commit()
         urls.append(resultat["secure_url"])
     return {"urls": urls}
 
@@ -499,7 +669,13 @@ def créer_annonce(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    db_annonce = models.Annonce(**annonce.model_dump(), clerk_user_id=user_id)
+    valider_images(db, user_id, annonce.images)
+    db_annonce = models.Annonce(
+        **annonce.model_dump(),
+        pseudo=_pseudo_clerk(user_id),
+        statut="publiee",
+        clerk_user_id=user_id,
+    )
     db.add(db_annonce)
     db.commit()
     db.refresh(db_annonce)
@@ -618,12 +794,14 @@ def modifier_annonce(
     verifier_proprietaire(annonce, user_id)
     if annonce.donne_at:
         raise HTTPException(status_code=400, detail="Cette annonce est cloturee")
+    valider_images(db, user_id, data.images, deja_presentes=annonce.images or [])
     images_supprimees = set(annonce.images or []) - set(data.images or [])
-    supprimer_images_cloudinary(list(images_supprimees))
     for key, value in data.model_dump().items():
         setattr(annonce, key, value)
     db.commit()
     db.refresh(annonce)
+    # Après le commit : si l'enregistrement échoue, les photos ne sont pas perdues
+    supprimer_images_cloudinary(list(images_supprimees))
     return annonce
 
 
@@ -671,10 +849,15 @@ def declarer_don(
     if not annonce:
         raise HTTPException(status_code=404, detail="Annonce introuvable")
     verifier_proprietaire(annonce, user_id)
-    if annonce.donne_at:
+    # UPDATE conditionnel atomique : deux clics simultanés ne comptent qu'un seul don
+    modifiees = (
+        db.query(models.Annonce)
+        .filter(models.Annonce.id == annonce_id, models.Annonce.donne_at == None)
+        .update({models.Annonce.donne_at: datetime.now(timezone.utc)}, synchronize_session=False)
+    )
+    if not modifiees:
+        db.rollback()
         raise HTTPException(status_code=400, detail="Ce don est deja enregistre")
-
-    annonce.donne_at = datetime.now(timezone.utc)
     # Trace independante de l'annonce : le compteur survit a la purge des 3 jours
     db.add(models.DonRealise(clerk_user_id=user_id, titre=annonce.titre[:100]))
     db.commit()
@@ -685,6 +868,7 @@ def declarer_don(
 @app.post("/annonces/{annonce_id}/vue")
 def compter_vue(
     annonce_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     user_id: str = Depends(get_user_id_optionnel),
 ):
@@ -693,6 +877,10 @@ def compter_vue(
     if not annonce:
         raise HTTPException(status_code=404, detail="Annonce introuvable")
     if user_id and annonce.clerk_user_id == user_id:
+        return {"comptee": False}
+    # Une vue par visiteur (compte, sinon IP) et par annonce toutes les 6 h : empêche de gonfler le compteur
+    visiteur = user_id or ip_client(request)
+    if limite_atteinte(visiteur, f"vue:{annonce_id}", maximum=1, fenetre_secondes=6 * 3600):
         return {"comptee": False}
     db.query(models.Annonce).filter(models.Annonce.id == annonce_id).update(
         {models.Annonce.vues: models.Annonce.vues + 1}
@@ -719,7 +907,10 @@ def ajouter_favori(
     )
     if not existe:
         db.add(models.Favori(clerk_user_id=user_id, annonce_id=annonce_id))
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()  # double clic : le favori existe déjà
     return {"est_favori": True}
 
 
@@ -777,7 +968,10 @@ def signaler_annonce(
     )
     if not existe:
         db.add(models.Signalement(annonce_id=annonce_id, clerk_user_id=user_id, raison=data.raison.strip()))
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()  # double envoi : déjà enregistré
     return {"message": "Signalement enregistré"}
 
 
@@ -868,21 +1062,21 @@ def admin_supprimer_annonce(
     if not annonce:
         raise HTTPException(status_code=404, detail="Annonce introuvable")
     journaliser(db, acteur["user_id"], "suppression_annonce", f"#{annonce_id} « {annonce.titre} » de {annonce.pseudo}")
-    supprimer_images_cloudinary(annonce.images or [])
+    images = list(annonce.images or [])
     db.delete(annonce)
     db.commit()
+    supprimer_images_cloudinary(images)
     return {"message": "Annonce supprimée"}
 
 
 @app.get("/admin/utilisateurs")
-async def admin_lister_utilisateurs(
+def admin_lister_utilisateurs(
     db: Session = Depends(get_db),
     acteur: dict = Depends(exiger_moderateur),
 ):
-    headers_clerk = {"Authorization": f"Bearer {os.getenv('CLERK_SECRET_KEY')}"}
-    async with httpx.AsyncClient(timeout=10) as client:
-        res = await client.get("https://api.clerk.com/v1/users?limit=100&order_by=-created_at", headers=headers_clerk)
-    if not res.is_success:
+    # Tous les comptes (pagination Clerk), et plus seulement les 100 derniers
+    comptes_clerk = _tous_les_utilisateurs_clerk()
+    if not comptes_clerk:
         raise HTTPException(status_code=502, detail="Impossible de récupérer les utilisateurs")
     comptes = dict(
         db.query(models.Annonce.clerk_user_id, func.count(models.Annonce.id))
@@ -892,7 +1086,7 @@ async def admin_lister_utilisateurs(
     roles = {r.clerk_user_id: r.role for r in db.query(models.Role).all()}
     admins = _admins_principaux()
     utilisateurs = []
-    for u in res.json():
+    for u in comptes_clerk:
         uid = u["id"]
         utilisateurs.append({
             "id": uid,
@@ -998,30 +1192,29 @@ def _est_participant(conv, user_id: str) -> bool:
     return user_id in (conv.donneur_id, conv.demandeur_id)
 
 
-async def _pseudo_clerk(user_id: str) -> str:
-    """Récupère le pseudo d'affichage d'un utilisateur via Clerk (au démarrage d'une conversation)."""
+def _pseudo_clerk(user_id: str) -> str:
+    """Pseudo d'affichage d'un utilisateur, lu chez Clerk (jamais fourni par le client)."""
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(
-                f"https://api.clerk.com/v1/users/{user_id}",
-                headers={"Authorization": f"Bearer {os.getenv('CLERK_SECRET_KEY')}"},
-            )
+        r = httpx.get(
+            f"https://api.clerk.com/v1/users/{user_id}",
+            headers={"Authorization": f"Bearer {os.getenv('CLERK_SECRET_KEY')}"},
+            timeout=10,
+        )
         if r.is_success:
-            u = r.json()
-            return u.get("username") or u.get("first_name") or "Un habitant"
+            return _pseudo_depuis_clerk(r.json())
     except Exception:
         pass
     return "Un habitant"
 
 
-async def _notifier_nouveau_message(destinataire_id: str, expediteur_pseudo: str, annonce_titre: str, conversation_id: int):
-    """Email 'nouveau message' au destinataire (best-effort, jamais bloquant)."""
+def _notifier_nouveau_message(destinataire_id: str, expediteur_pseudo: str, annonce_titre: str, conversation_id: int):
+    """Email 'nouveau message' au destinataire (tâche de fond, best-effort)."""
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(
-                f"https://api.clerk.com/v1/users/{destinataire_id}",
-                headers={"Authorization": f"Bearer {os.getenv('CLERK_SECRET_KEY')}"},
-            )
+        r = httpx.get(
+            f"https://api.clerk.com/v1/users/{destinataire_id}",
+            headers={"Authorization": f"Bearer {os.getenv('CLERK_SECRET_KEY')}"},
+            timeout=10,
+        )
         if not r.is_success:
             return
         email = _email_principal(r.json())
@@ -1048,7 +1241,7 @@ async def _notifier_nouveau_message(destinataire_id: str, expediteur_pseudo: str
             </div>
             """,
         }
-        await anyio.to_thread.run_sync(partial(resend.Emails.send, payload))
+        resend.Emails.send(payload)
     except Exception:
         pass
 
@@ -1062,7 +1255,7 @@ class MessageCreate(PydanticBase):
 
 
 @app.post("/conversations")
-async def demarrer_conversation(
+def demarrer_conversation(
     data: ConversationCreate,
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
@@ -1085,7 +1278,7 @@ async def demarrer_conversation(
     if existante:
         return {"id": existante.id}
 
-    demandeur_pseudo = await _pseudo_clerk(user_id)
+    demandeur_pseudo = _pseudo_clerk(user_id)
     conv = models.Conversation(
         annonce_id=data.annonce_id,
         donneur_id=annonce.clerk_user_id,
@@ -1094,7 +1287,19 @@ async def demarrer_conversation(
         demandeur_pseudo=demandeur_pseudo[:50],
     )
     db.add(conv)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Double clic : la conversation vient d'être créée par l'autre requête
+        db.rollback()
+        existante = (
+            db.query(models.Conversation)
+            .filter(models.Conversation.annonce_id == data.annonce_id, models.Conversation.demandeur_id == user_id)
+            .first()
+        )
+        if not existante:
+            raise HTTPException(status_code=409, detail="Réessayez")
+        return {"id": existante.id}
     db.refresh(conv)
     return {"id": conv.id}
 
@@ -1130,14 +1335,18 @@ def mes_conversations(
         .group_by(models.Message.conversation_id)
         .all()
     )
+    # Dernier message de chaque conversation en une seule requête (DISTINCT ON Postgres)
+    derniers = {
+        m.conversation_id: m
+        for m in db.query(models.Message)
+        .filter(models.Message.conversation_id.in_(ids))
+        .distinct(models.Message.conversation_id)
+        .order_by(models.Message.conversation_id, models.Message.created_at.desc(), models.Message.id.desc())
+        .all()
+    }
     resultat = []
     for c in convs:
-        dernier = (
-            db.query(models.Message)
-            .filter(models.Message.conversation_id == c.id)
-            .order_by(models.Message.created_at.desc())
-            .first()
-        )
+        dernier = derniers.get(c.id)
         annonce = annonces.get(c.annonce_id)
         resultat.append({
             "id": c.id,
@@ -1191,9 +1400,10 @@ def get_conversation(
 
 
 @app.post("/conversations/{conversation_id}/messages")
-async def envoyer_message(
+def envoyer_message(
     conversation_id: int,
     data: MessageCreate,
+    taches: BackgroundTasks,
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
@@ -1231,7 +1441,8 @@ async def envoyer_message(
     db.refresh(msg)
 
     if doit_notifier:
-        await _notifier_nouveau_message(destinataire_id, expediteur_pseudo, annonce_titre, conversation_id)
+        # Envoyé après la réponse : l'expéditeur n'attend pas Clerk + Resend
+        taches.add_task(_notifier_nouveau_message, destinataire_id, expediteur_pseudo, annonce_titre, conversation_id)
 
     return {"id": msg.id, "contenu": msg.contenu, "created_at": msg.created_at, "a_moi": True, "systeme": False}
 
@@ -1293,6 +1504,10 @@ def quitter_conversation(
     if not _est_participant(conv, user_id):
         raise HTTPException(status_code=403, detail="Accès refusé")
 
+    moi_actif = conv.donneur_actif if user_id == conv.donneur_id else conv.demandeur_actif
+    if not moi_actif:
+        return {"ok": True}  # déjà quittée : pas de second message « a quitté »
+
     if user_id == conv.donneur_id:
         conv.donneur_actif = False
         mon_pseudo = conv.donneur_pseudo
@@ -1336,19 +1551,24 @@ def signaler_conversation(
     if not _est_participant(conv, user_id):
         raise HTTPException(status_code=403, detail="Accès refusé")
     verifier_rate_limit(user_id, "signalement", maximum=5, fenetre_secondes=3600)
-    # Rattaché à l'annonce de la conversation pour apparaître dans le panel admin existant
-    raison = f"[Conversation] {data.raison.strip()}"
+    # Rattaché à l'annonce de la conversation pour apparaître dans le panel admin existant ;
+    # le numéro permet de retrouver la conversation concernée
+    raison = f"[Conversation #{conv.id}] {data.raison.strip()}"
     existant = (
         db.query(models.Signalement)
         .filter(models.Signalement.clerk_user_id == user_id, models.Signalement.annonce_id == conv.annonce_id)
         .first()
     )
     if existant:
-        existant.raison = raison
+        # On complète le signalement existant au lieu de l'écraser
+        existant.raison = f"{existant.raison}\n{raison}"
         existant.traite = False
     else:
         db.add(models.Signalement(annonce_id=conv.annonce_id, clerk_user_id=user_id, raison=raison))
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
     return {"ok": True}
 
 
@@ -1362,9 +1582,10 @@ def supprimer_annonce(
     if not annonce:
         raise HTTPException(status_code=404, detail="Annonce introuvable")
     verifier_proprietaire(annonce, user_id)
-    supprimer_images_cloudinary(annonce.images or [])
+    images = list(annonce.images or [])
     db.delete(annonce)
     db.commit()
+    supprimer_images_cloudinary(images)
     return {"message": "Annonce supprimée"}
 
 
@@ -1376,6 +1597,8 @@ class DesabonnementRequete(PydanticBase):
 
 @app.post("/newsletter/desabonnement")
 def desabonner_newsletter(data: DesabonnementRequete, db: Session = Depends(get_db)):
+    if not _cle_desabonnement():
+        raise HTTPException(status_code=503, detail="Désabonnement momentanément indisponible")
     uid = _verifier_token_desabonnement(data.token)
     if not uid:
         raise HTTPException(status_code=400, detail="Lien de désabonnement invalide ou expiré")
@@ -1386,7 +1609,10 @@ def desabonner_newsletter(data: DesabonnementRequete, db: Session = Depends(get_
     )
     if not existe:
         db.add(models.DesabonnementNewsletter(clerk_user_id=uid))
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()  # double clic : déjà désabonné
     return {"ok": True}
 
 
@@ -1435,7 +1661,7 @@ def contacter_equipe(
         raise HTTPException(status_code=400, detail="Adresse email invalide")
 
     # Anti-spam : par compte si connecté, sinon par adresse IP
-    cle = user_id or (request.client.host if request.client else "inconnu")
+    cle = user_id or ip_client(request)
     verifier_rate_limit(cle, "contact_site", maximum=3, fenetre_secondes=3600)
 
     destinataires = _emails_equipe(db)

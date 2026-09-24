@@ -11,10 +11,7 @@ function Desabonnement() {
   const [etat, setEtat] = useState<"chargement" | "succes" | "erreur">("chargement")
 
   useEffect(() => {
-    if (!token) {
-      setEtat("erreur")
-      return
-    }
+    if (!token) return
     let actif = true
     ;(async () => {
       try {
@@ -31,11 +28,14 @@ function Desabonnement() {
     return () => { actif = false }
   }, [token])
 
-  if (etat === "chargement") {
+  // Lien sans jeton : erreur d'emblée
+  const etatAffiche = token ? etat : "erreur"
+
+  if (etatAffiche === "chargement") {
     return <p className="text-gray-400">Désabonnement en cours...</p>
   }
 
-  if (etat === "erreur") {
+  if (etatAffiche === "erreur") {
     return (
       <>
         <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">

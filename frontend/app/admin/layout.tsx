@@ -14,11 +14,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [etat, setEtat] = useState<"chargement" | "ok" | "refuse">("chargement")
 
   useEffect(() => {
-    if (!isLoaded) return
-    if (!isSignedIn) {
-      setEtat("refuse")
-      return
-    }
+    if (!isLoaded || !isSignedIn) return
     let actif = true
     ;(async () => {
       try {
@@ -41,7 +37,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => { actif = false }
   }, [isLoaded, isSignedIn, getToken])
 
-  if (etat === "chargement") {
+  // Non connecté : refusé d'emblée, sans attendre la réponse du serveur
+  const etatAffiche = isLoaded && !isSignedIn ? "refuse" : etat
+
+  if (etatAffiche === "chargement") {
     return (
       <main>
         <div className="max-w-6xl mx-auto px-6 py-12">
@@ -52,7 +51,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   // Pour un visiteur non autorisé, la page n'existe pas.
-  if (etat === "refuse") notFound()
+  if (etatAffiche === "refuse") notFound()
 
   const liens = [
     { href: "/admin", label: "Tableau de bord", Icon: LayoutDashboard },

@@ -20,6 +20,8 @@ export default function Profil() {
   const [loading, setLoading] = useState(true)
   const [renouvellement, setRenouvellement] = useState<number | null>(null)
   const [don, setDon] = useState<number | null>(null)
+  // Heure de référence figée à l'ouverture de la page : le rendu reste stable
+  const [maintenant] = useState(() => Date.now())
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) router.replace("/")
@@ -58,12 +60,12 @@ export default function Profil() {
   const RENOUVELABLE_APRES_JOURS = 7
 
   function joursRestants(annonce: Annonce) {
-    const age = (Date.now() - new Date(annonce.created_at).getTime()) / 86400000
+    const age = (maintenant - new Date(annonce.created_at).getTime()) / 86400000
     return Math.max(0, Math.ceil(DUREE_VIE_JOURS - age))
   }
 
   function renouvelableDans(annonce: Annonce) {
-    const age = Math.floor((Date.now() - new Date(annonce.created_at).getTime()) / 86400000)
+    const age = Math.floor((maintenant - new Date(annonce.created_at).getTime()) / 86400000)
     return Math.max(0, RENOUVELABLE_APRES_JOURS - age)
   }
 
@@ -92,7 +94,7 @@ export default function Profil() {
 
   function retraitDans(annonce: Annonce) {
     if (!annonce.donne_at) return 0
-    const age = (Date.now() - new Date(annonce.donne_at).getTime()) / 86400000
+    const age = (maintenant - new Date(annonce.donne_at).getTime()) / 86400000
     return Math.max(0, Math.ceil(DELAI_RETRAIT_DON_JOURS - age))
   }
 

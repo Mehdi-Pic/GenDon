@@ -1,16 +1,17 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useSyncExternalStore } from "react"
 import { Share2, Copy, Check, MessageCircle, MoreHorizontal, X } from "lucide-react"
 
 export default function ShareButton({ titre }: { titre: string }) {
   const [ouvert, setOuvert] = useState(false)
   const [copie, setCopie] = useState(false)
-  const [natifDispo, setNatifDispo] = useState(false)
-
-  useEffect(() => {
-    setNatifDispo(typeof navigator !== "undefined" && !!navigator.share)
-  }, [])
+  // false côté serveur, vraie valeur dans le navigateur (pas de décalage d'hydratation)
+  const natifDispo = useSyncExternalStore(
+    () => () => {},
+    () => !!navigator.share,
+    () => false,
+  )
 
   const texte = `${titre}, à donner gratuitement sur GenDon`
 

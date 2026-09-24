@@ -34,8 +34,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version-file: backend/.python-version
           cache: pip
@@ -53,8 +53,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -62,7 +62,6 @@ jobs:
       - run: npm ci
       - name: Vérification des types
         run: npx tsc --noEmit
-      # Non bloquant pour l'instant : 14 erreurs de lint existaient déjà avant la CI
-      - name: Lint (informatif)
-        run: npx eslint app
-        continue-on-error: true
+      # Bloquant : aucune erreur ni aucun avertissement toléré
+      - name: Lint
+        run: npx eslint app --max-warnings 0

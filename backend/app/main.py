@@ -129,7 +129,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Content-Type", "Authorization"],
 )
 
@@ -1587,6 +1587,46 @@ def supprimer_annonce(
     db.commit()
     supprimer_images_cloudinary(images)
     return {"message": "Annonce supprimée"}
+
+
+# ---------- Préférence newsletter (depuis Mon profil) ----------
+
+class PreferenceNewsletter(PydanticBase):
+    abonne: bool
+
+
+@app.get("/newsletter/moi")
+def lire_preference_newsletter(
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    desabonne = (
+        db.query(models.DesabonnementNewsletter)
+        .filter(models.DesabonnementNewsletter.clerk_user_id == user_id)
+        .first()
+    )
+    return {"abonne": desabonne is None}
+
+
+@app.put("/newsletter/moi")
+def changer_preference_newsletter(
+    data: PreferenceNewsletter,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    requete = db.query(models.DesabonnementNewsletter).filter(
+        models.DesabonnementNewsletter.clerk_user_id == user_id
+    )
+    if data.abonne:
+        requete.delete()
+        db.commit()
+    elif not requete.first():
+        db.add(models.DesabonnementNewsletter(clerk_user_id=user_id))
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()  # double clic : déjà désabonné
+    return {"abonne": data.abonne}
 
 
 # ---------- Désabonnement newsletter (public, via lien signé dans l'email) ----------

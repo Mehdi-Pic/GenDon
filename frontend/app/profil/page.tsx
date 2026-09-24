@@ -3,7 +3,7 @@
 import { useUser, useAuth } from "@clerk/nextjs"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { MapPin, Pencil, Trash2, Eye, Heart, RefreshCw, HandHeart } from "lucide-react"
+import { MapPin, Pencil, Trash2, Eye, Heart, RefreshCw, HandHeart, Mail } from "lucide-react"
 import Link from "next/link"
 import AnnonceCard from "../components/AnnonceCard"
 import ServiceIndisponible from "../components/ServiceIndisponible"
@@ -20,6 +20,9 @@ export default function Profil() {
   const [favoris, setFavoris] = useState<Annonce[]>([])
   const [loading, setLoading] = useState(true)
   const [indisponible, setIndisponible] = useState(false)
+  // null tant que la préférence n'est pas connue : l'interrupteur reste masqué
+  const [newsletter, setNewsletter] = useState<boolean | null>(null)
+  const [erreurNewsletter, setErreurNewsletter] = useState("")
   const [renouvellement, setRenouvellement] = useState<number | null>(null)
   const [don, setDon] = useState<number | null>(null)
   // Heure de référence figée à l'ouverture de la page : le rendu reste stable
@@ -55,6 +58,39 @@ export default function Profil() {
     })()
     return () => { actif = false }
   }, [isLoaded, isSignedIn, getToken])
+
+  // Préférence newsletter chargée à part : son échec ne doit pas bloquer le profil
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+    let actif = true
+    ;(async () => {
+      try {
+        const token = await getToken()
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/newsletter/moi`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (actif && res.ok) setNewsletter((await res.json()).abonne)
+      } catch {}
+    })()
+    return () => { actif = false }
+  }, [isLoaded, isSignedIn, getToken])
+
+  async function changerNewsletter(abonne: boolean) {
+    setErreurNewsletter("")
+    setNewsletter(abonne) // affichage immédiat, annulé si le serveur refuse
+    try {
+      const token = await getToken()
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/newsletter/moi`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ abonne }),
+      })
+      if (!res.ok) throw new Error()
+    } catch {
+      setNewsletter(!abonne)
+      setErreurNewsletter("Le changement n'a pas pu être enregistré. Réessayez.")
+    }
+  }
 
   // Une annonce est supprimee automatiquement 30 jours apres sa (re)publication
   const DUREE_VIE_JOURS = 30
@@ -320,6 +356,33 @@ export default function Profil() {
               ))}
             </div>
           )
+        )}
+
+        {newsletter !== null && (
+          <section className="mt-12 pt-8 border-t border-gray-100">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Préférences</h2>
+            <label className="flex items-start justify-between gap-4 bg-gray-50 rounded-2xl px-5 py-4 cursor-pointer">
+              <span className="flex items-start gap-3">
+                <Mail className="w-5 h-5 text-green-600 mt-0.5 shrink-0" aria-hidden="true" />
+                <span>
+                  <span className="block text-sm font-semibold text-gray-900">Lettre d&apos;information</span>
+                  <span className="block text-sm text-gray-500">Recevoir chaque jeudi les derniers dons publiés à Gennevilliers.</span>
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={newsletter}
+                onChange={(e) => changerNewsletter(e.target.checked)}
+                className="sr-only peer"
+              />
+              <span
+                aria-hidden="true"
+                className="relative shrink-0 w-11 h-6 rounded-full bg-gray-300 peer-checked:bg-green-600 peer-focus-visible:ring-2 peer-focus-visible:ring-green-300 transition-colors after:absolute after:top-0.5 after:left-0.5 after:w-5 after:h-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-5"
+              />
+            </label>
+            {erreurNewsletter && <p className="text-sm text-red-600 mt-2">{erreurNewsletter}</p>}
+          </section>
         )}
       </div>
     </main>

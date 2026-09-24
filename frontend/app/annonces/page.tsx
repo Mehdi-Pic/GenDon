@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import AnnonceCard from "../components/AnnonceCard"
 import FiltrePanel from "./FiltrePanel"
+import ServiceIndisponible from "../components/ServiceIndisponible"
 import { auth } from "@clerk/nextjs/server"
 import type { Annonce } from "../lib/annonces"
 
@@ -24,7 +25,8 @@ type ResultatPaginé = {
   page: number
 }
 
-async function getAnnonces(p: SearchParams, token?: string | null): Promise<ResultatPaginé> {
+// null = serveur injoignable ou en erreur (à distinguer d'une liste vide)
+async function getAnnonces(p: SearchParams, token?: string | null): Promise<ResultatPaginé | null> {
   const base = process.env.NEXT_PUBLIC_API_URL
   const params = new URLSearchParams()
   if (p.categorie) params.set("categorie", p.categorie)
@@ -36,12 +38,16 @@ async function getAnnonces(p: SearchParams, token?: string | null): Promise<Resu
   if (p.page && p.page !== "1") params.set("page", p.page)
   const qs = params.toString()
   const url = `${base}/annonces${qs ? `?${qs}` : ""}`
-  const res = await fetch(url, {
-    cache: "no-store",
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  })
-  if (!res.ok) return { annonces: [], total: 0, pages: 1, page: 1 }
-  return res.json()
+  try {
+    const res = await fetch(url, {
+      cache: "no-store",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
 }
 
 function urlPage(sp: SearchParams, page: number): string {
@@ -71,6 +77,17 @@ export default async function Annonces({ searchParams }: { searchParams: Promise
   const { userId, getToken } = await auth()
   const token = userId ? await getToken() : null
   const data = await getAnnonces(sp, token)
+
+  if (!data) {
+    return (
+      <main>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+          <ServiceIndisponible />
+        </div>
+      </main>
+    )
+  }
+
   const { annonces, total, pages } = data
 
   // Page hors bornes (saisie a la main, lien perime) : on ramene sur la premiere,

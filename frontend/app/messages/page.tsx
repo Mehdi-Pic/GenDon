@@ -7,6 +7,7 @@ import Link from "next/link"
 import { MessageCircle } from "lucide-react"
 import { vignette } from "../lib/annonces"
 import ConversationMenu from "./ConversationMenu"
+import ServiceIndisponible from "../components/ServiceIndisponible"
 
 type Conversation = {
   id: number
@@ -26,6 +27,7 @@ export default function Messages() {
   const router = useRouter()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [loading, setLoading] = useState(true)
+  const [indisponible, setIndisponible] = useState(false)
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) router.replace("/")
@@ -40,10 +42,11 @@ export default function Messages() {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/conversations`, {
           headers: { Authorization: `Bearer ${token}` },
         })
+        if (!res.ok) throw new Error("serveur")
         const data = await res.json()
         if (actif) setConversations(Array.isArray(data) ? data : [])
       } catch {
-        if (actif) setConversations([])
+        if (actif) setIndisponible(true)
       } finally {
         if (actif) setLoading(false)
       }
@@ -56,6 +59,16 @@ export default function Messages() {
       <main>
         <div className="max-w-2xl mx-auto px-6 py-12">
           <p className="text-gray-400">Chargement...</p>
+        </div>
+      </main>
+    )
+  }
+
+  if (indisponible) {
+    return (
+      <main>
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
+          <ServiceIndisponible />
         </div>
       </main>
     )

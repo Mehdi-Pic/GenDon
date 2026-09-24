@@ -126,3 +126,36 @@ def test_nettoyage_du_rate_limit():
 
 def test_admin_reserve_aux_moderateurs(client):
     assert client.get("/admin/stats").status_code == 403
+
+
+# ---------- Préférence newsletter depuis le profil ----------
+
+def test_preference_newsletter(client, services, monkeypatch):
+    assert client.get("/newsletter/moi").json() == {"abonne": True}  # abonné par défaut
+    assert client.put("/newsletter/moi", json={"abonne": False}).json() == {"abonne": False}
+    assert client.put("/newsletter/moi", json={"abonne": False}).status_code == 200  # idempotent
+    assert client.get("/newsletter/moi").json() == {"abonne": False}
+
+    # Désabonné : il ne reçoit pas la lettre
+    publier(client)
+    compte = {"id": "u1", "primary_email_address_id": "e", "email_addresses": [{"id": "e", "email_address": "u1@x.fr"}]}
+    monkeypatch.setattr(main, "_tous_les_utilisateurs_clerk", lambda: [compte])
+    main.envoyer_newsletter_hebdo()
+    assert services.lots_newsletter == []
+
+    # Réabonné : il la reçoit de nouveau
+    client.put("/newsletter/moi", json={"abonne": True})
+    assert client.get("/newsletter/moi").json() == {"abonne": True}
+    main.envoyer_newsletter_hebdo()
+    assert len(services.lots_newsletter) == 1
+
+
+def test_cors_autorise_put_depuis_le_site(client):
+    """Le navigateur envoie une requête de contrôle avant un PUT : elle doit être acceptée."""
+    reponse = client.options("/newsletter/moi", headers={
+        "Origin": "http://localhost:3000",
+        "Access-Control-Request-Method": "PUT",
+        "Access-Control-Request-Headers": "authorization,content-type",
+    })
+    assert reponse.status_code == 200
+    assert "PUT" in reponse.headers["access-control-allow-methods"]

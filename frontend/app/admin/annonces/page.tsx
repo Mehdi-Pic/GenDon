@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState } from "react"
 import { useAuth } from "@clerk/nextjs"
 import Link from "next/link"
 import { Search, Trash2, ExternalLink, Eye } from "lucide-react"
@@ -11,32 +11,36 @@ export default function AdminAnnonces() {
   const [annonces, setAnnonces] = useState<Annonce[]>([])
   const [total, setTotal] = useState(0)
   const [pages, setPages] = useState(1)
-  const [page, setPage] = useState(1)
   const [recherche, setRecherche] = useState("")
-  const [loading, setLoading] = useState(true)
+  // Page et recherche validée : chaque nouvelle requête relance le chargement
+  const [requete, setRequete] = useState({ page: 1, filtre: "" })
+  const [requeteChargee, setRequeteChargee] = useState<typeof requete | null>(null)
+  const page = requete.page
+  const loading = requeteChargee !== requete
 
-  const charger = useCallback(async (p: number, q: string) => {
-    setLoading(true)
-    try {
-      const token = await getToken()
-      const params = new URLSearchParams()
-      if (q) params.set("recherche", q)
-      if (p > 1) params.set("page", String(p))
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/annonces?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setAnnonces(data.annonces)
-        setTotal(data.total)
-        setPages(data.pages)
+  useEffect(() => {
+    let actif = true
+    ;(async () => {
+      try {
+        const token = await getToken()
+        const params = new URLSearchParams()
+        if (requete.filtre) params.set("recherche", requete.filtre)
+        if (requete.page > 1) params.set("page", String(requete.page))
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/annonces?${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await res.json()
+        if (actif && res.ok) {
+          setAnnonces(data.annonces)
+          setTotal(data.total)
+          setPages(data.pages)
+        }
+      } catch {} finally {
+        if (actif) setRequeteChargee(requete)
       }
-    } catch {} finally {
-      setLoading(false)
-    }
-  }, [getToken])
-
-  useEffect(() => { charger(page, recherche) }, [charger, page])
+    })()
+    return () => { actif = false }
+  }, [getToken, requete])
 
   async function supprimer(annonce: Annonce) {
     if (!confirm(`Supprimer « ${annonce.titre} » de ${annonce.pseudo} ? Cette action est définitive.`)) return
@@ -59,7 +63,7 @@ export default function AdminAnnonces() {
       <p className="text-sm text-gray-400 mb-6">{total} annonce{total > 1 ? "s" : ""} en ligne</p>
 
       <form
-        onSubmit={(e) => { e.preventDefault(); setPage(1); charger(1, recherche) }}
+        onSubmit={(e) => { e.preventDefault(); setRequete({ page: 1, filtre: recherche.trim() }) }}
         className="relative mb-5 sm:mb-6 sm:max-w-md"
       >
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -115,7 +119,7 @@ export default function AdminAnnonces() {
         <div className="flex items-center justify-center gap-3 mt-8">
           <button
             disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
+            onClick={() => setRequete((r) => ({ ...r, page: r.page - 1 }))}
             className="px-4 py-2 rounded-full text-sm border border-gray-200 disabled:opacity-40 hover:border-gray-400 transition-colors"
           >
             Précédent
@@ -123,7 +127,7 @@ export default function AdminAnnonces() {
           <span className="text-sm text-gray-500">{page} / {pages}</span>
           <button
             disabled={page >= pages}
-            onClick={() => setPage((p) => p + 1)}
+            onClick={() => setRequete((r) => ({ ...r, page: r.page + 1 }))}
             className="px-4 py-2 rounded-full text-sm border border-gray-200 disabled:opacity-40 hover:border-gray-400 transition-colors"
           >
             Suivant

@@ -93,7 +93,7 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
       <main>
         <div className="max-w-2xl mx-auto px-6 py-24 text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Annonce introuvable</h1>
-          <p className="text-gray-500 mb-8">Cette annonce n'existe plus ou a été supprimée.</p>
+          <p className="text-gray-500 mb-8">Cette annonce n&apos;existe plus ou a été supprimée.</p>
           <Link href="/profil" className="bg-gray-900 hover:bg-gray-700 text-white px-6 py-3 rounded-xl font-semibold transition-colors">
             Retour à mon profil
           </Link>
@@ -125,7 +125,7 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
         <Link href="/profil" className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-900 text-sm mb-8 transition-colors font-medium">
           ← Retour à mon profil
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900 mb-8">Modifier l'annonce</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-8">Modifier l&apos;annonce</h1>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           <div>

@@ -66,11 +66,13 @@ export default function Conversation({ params }: { params: Promise<{ id: string 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return
     const visible = () => document.visibilityState === "visible"
-    charger(visible())
+    // Premier chargement lancé de façon asynchrone, comme les suivants (pas de setState synchrone)
+    const premier = setTimeout(() => charger(visible()), 0)
     const intervalle = setInterval(() => charger(visible()), 5000)
     const auRetour = () => { if (visible()) charger(true) }
     document.addEventListener("visibilitychange", auRetour)
     return () => {
+      clearTimeout(premier)
       clearInterval(intervalle)
       document.removeEventListener("visibilitychange", auRetour)
     }

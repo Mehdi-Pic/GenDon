@@ -4,10 +4,10 @@ import AnnonceCard from "./components/AnnonceCard"
 import ServiceIndisponible from "./components/ServiceIndisponible"
 import { QUARTIERS, type Annonce } from "./lib/annonces"
 
-// Les chiffres et les dernieres annonces doivent refleter l'etat reel du site :
-// on rend a chaque visite plutot que de figer un instantane au moment du build,
-// qui restait faux jusqu'a la regeneration suivante.
-export const dynamic = "force-dynamic"
+// Page mise en cache par Vercel et régénérée en arrière-plan au plus toutes les 60 s :
+// le visiteur la reçoit instantanément, avec des chiffres qui ont au plus une minute de retard.
+// (Avant, chaque visite attendait deux appels à l'API avant d'afficher quoi que ce soit.)
+export const revalidate = 60
 
 // null = source injoignable : on affiche « – » plutôt qu'un 0 trompeur
 type Accueil = { annonces: Annonce[] | null; disponibles: number | null; dons: number | null }
@@ -21,8 +21,8 @@ async function getAccueil(): Promise<Accueil> {
   // Les deux sources sont interrogees separement : la panne de l'une
   // ne doit pas vider l'autre.
   const [resListe, resStats] = await Promise.allSettled([
-    fetch(`${base}/annonces`, { cache: "no-store" }),
-    fetch(`${base}/stats`, { cache: "no-store" }),
+    fetch(`${base}/annonces`, { next: { revalidate: 60 } }),
+    fetch(`${base}/stats`, { next: { revalidate: 60 } }),
   ])
 
   try {
@@ -57,7 +57,7 @@ export default async function Home() {
       <section className="relative overflow-hidden py-14 sm:py-24 text-center">
         <div
           className="absolute inset-0 bg-cover bg-center scale-105"
-          style={{ backgroundImage: "url('/gennevilliers_ciel.jpg')", filter: "blur(4px)" }}
+          style={{ backgroundImage: "url('/gennevilliers_ciel.webp')", filter: "blur(4px)" }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/20 to-black/40" />
         <div className="relative z-10 max-w-6xl mx-auto px-5 sm:px-6">

@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { MapPin, User, ArrowLeft, Pencil, Eye } from "lucide-react"
+import { MapPin, User, ArrowLeft, Pencil, Eye, CheckCircle } from "lucide-react"
 import { auth } from "@clerk/nextjs/server"
 import ImageCarousel from "../../components/ImageCarousel"
 import ContactButton from "./ContactButton"
@@ -28,6 +28,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return {
     title: annonce.titre,
     description,
+    // Objet deja donne : la page disparait sous 3 jours, inutile de l'indexer
+    ...(annonce.donne_at ? { robots: { index: false } } : {}),
     openGraph: {
       title: `${annonce.titre} · Don gratuit à Gennevilliers`,
       description,
@@ -63,7 +65,7 @@ export default async function AnnonceDetail({ params }: { params: Promise<{ id: 
           <span className="bg-gray-100 text-gray-700 text-xs font-semibold px-3 py-1.5 rounded-full">{annonce.categorie}</span>
           <span className="text-xs text-gray-400">{new Date(annonce.created_at).toLocaleDateString("fr-FR")}</span>
           <div className="ml-auto flex items-center gap-2">
-            {!annonce.est_proprietaire && (
+            {!annonce.est_proprietaire && !annonce.donne_at && (
               <FavoriButton annonceId={annonce.id} initial={annonce.est_favori ?? false} />
             )}
             <ShareButton titre={annonce.titre} />
@@ -85,7 +87,17 @@ export default async function AnnonceDetail({ params }: { params: Promise<{ id: 
             {annonce.vues ?? 0} vue{(annonce.vues ?? 0) > 1 ? "s" : ""}
           </div>
         </div>
-        {annonce.est_proprietaire ? (
+        {annonce.donne_at ? (
+          <div className="flex items-center gap-3 bg-gray-50 rounded-2xl px-5 py-4">
+            <CheckCircle className="w-5 h-5 text-green-600 shrink-0" aria-hidden="true" />
+            <p className="text-sm font-medium text-gray-600">
+              {annonce.est_proprietaire
+                ? "Vous avez déclaré cet objet donné : l'annonce sera retirée du site sous 3 jours."
+                : "Cet objet a déjà été donné."}{" "}
+              <Link href="/annonces" className="text-green-600 hover:underline">Voir les autres dons</Link>
+            </p>
+          </div>
+        ) : annonce.est_proprietaire ? (
           <div className="flex items-center justify-between bg-gray-50 rounded-2xl px-5 py-4">
             <p className="text-sm font-medium text-gray-600">C&apos;est votre annonce.</p>
             <Link href={`/mes-annonces/${annonce.id}/modifier`} className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-700 text-white px-4 py-2 rounded-full text-sm font-semibold transition-colors">

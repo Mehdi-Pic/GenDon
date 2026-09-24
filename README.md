@@ -26,7 +26,7 @@ Projet d'apprentissage du développement web (frontend, backend et services exte
 
 Le site est entièrement gratuit, sans publicité, et pensé d'abord pour le mobile.
 
-## Sous le capot
+## Stack
 
 - **Site** : Next.js, React, TypeScript, Tailwind CSS
 - **API** : Python, FastAPI, PostgreSQL

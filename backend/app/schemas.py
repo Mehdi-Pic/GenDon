@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional, List
 
 CATEGORIES = [
-    "Immobilier", "Vêtements", "Maison & Jardin",
+    "Mobilier", "Vêtements", "Maison & Jardin",
     "Électronique", "Loisirs", "Sport", "Autres",
 ]
 
@@ -19,11 +19,11 @@ class AnnonceCreate(BaseModel):
     description: str = Field(min_length=1, max_length=500)
     categorie: str
     quartier: str
-    pseudo: str = Field(min_length=1, max_length=50)
     images: Optional[List[str]] = []
-    statut: Optional[str] = "publiee"
+    # Le pseudo et le statut ne sont plus lus depuis le client : le pseudo vient de Clerk
+    # (impossible d'usurper celui d'un autre) et le statut est fixe par le serveur.
 
-    @field_validator("titre", "description", "pseudo")
+    @field_validator("titre", "description")
     @classmethod
     def non_vide(cls, v):
         v = v.strip()

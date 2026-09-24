@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { MapPin, Pencil, Trash2, Eye, Heart, RefreshCw, HandHeart } from "lucide-react"
 import Link from "next/link"
 import AnnonceCard from "../components/AnnonceCard"
+import ServiceIndisponible from "../components/ServiceIndisponible"
 import { vignette, type Annonce } from "../lib/annonces"
 
 type Onglet = "annonces" | "favoris"
@@ -18,6 +19,7 @@ export default function Profil() {
   const [annonces, setAnnonces] = useState<Annonce[]>([])
   const [favoris, setFavoris] = useState<Annonce[]>([])
   const [loading, setLoading] = useState(true)
+  const [indisponible, setIndisponible] = useState(false)
   const [renouvellement, setRenouvellement] = useState<number | null>(null)
   const [don, setDon] = useState<number | null>(null)
   // Heure de référence figée à l'ouverture de la page : le rendu reste stable
@@ -38,16 +40,15 @@ export default function Profil() {
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/me`, { headers }),
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/favoris`, { headers }),
         ])
+        if (!resAnnonces.ok || !resFavoris.ok) throw new Error("serveur")
         const [dataAnnonces, dataFavoris] = await Promise.all([resAnnonces.json(), resFavoris.json()])
         if (actif) {
           setAnnonces(Array.isArray(dataAnnonces) ? dataAnnonces : [])
           setFavoris(Array.isArray(dataFavoris) ? dataFavoris : [])
         }
       } catch {
-        if (actif) {
-          setAnnonces([])
-          setFavoris([])
-        }
+        // Sans ça, une panne affichait « aucune annonce » comme si le compte était vide
+        if (actif) setIndisponible(true)
       } finally {
         if (actif) setLoading(false)
       }
@@ -138,6 +139,16 @@ export default function Profil() {
       <main>
         <div className="max-w-4xl mx-auto px-6 py-12">
           <p className="text-gray-400">Chargement...</p>
+        </div>
+      </main>
+    )
+  }
+
+  if (indisponible) {
+    return (
+      <main>
+        <div className="max-w-4xl mx-auto px-6 py-12">
+          <ServiceIndisponible />
         </div>
       </main>
     )

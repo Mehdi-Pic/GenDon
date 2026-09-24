@@ -8,22 +8,31 @@ import ContactButton from "./ContactButton"
 import ShareButton from "./ShareButton"
 import FavoriButton from "../../components/FavoriButton"
 import VueTracker from "./VueTracker"
+import ServiceIndisponible from "../../components/ServiceIndisponible"
 import SignalerButton from "./SignalerButton"
 import { vignette, type Annonce } from "../../lib/annonces"
 
-async function getAnnonce(id: string, token?: string | null): Promise<Annonce | null> {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}`, {
-    cache: "no-store",
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  })
-  if (!res.ok) return null
-  return res.json()
+// "introuvable" : l'annonce n'existe pas (404). "indisponible" : le serveur ne répond pas.
+async function getAnnonce(id: string, token?: string | null): Promise<Annonce | "introuvable" | "indisponible"> {
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}`, {
+      cache: "no-store",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+    // 422 : identifiant non numérique dans l'URL, c'est aussi une page qui n'existe pas
+    if (res.status === 404 || res.status === 422) return "introuvable"
+    if (!res.ok) return "indisponible"
+    return await res.json()
+  } catch {
+    return "indisponible"
+  }
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
   const annonce = await getAnnonce(id)
-  if (!annonce) return { title: "Annonce introuvable" }
+  if (annonce === "introuvable") return { title: "Annonce introuvable" }
+  if (annonce === "indisponible") return { title: "Service momentanément indisponible", robots: { index: false } }
   const description = annonce.description.slice(0, 160)
   return {
     title: annonce.titre,
@@ -50,7 +59,16 @@ export default async function AnnonceDetail({ params }: { params: Promise<{ id: 
   const token = userId ? await getToken() : null
   const annonce = await getAnnonce(id, token)
 
-  if (!annonce) notFound()
+  if (annonce === "introuvable") notFound()
+  if (annonce === "indisponible") {
+    return (
+      <main>
+        <div className="max-w-3xl mx-auto px-6 py-10">
+          <ServiceIndisponible />
+        </div>
+      </main>
+    )
+  }
 
   return (
     <main>

@@ -1,6 +1,7 @@
 import { ArrowRight, MapPin, Heart, Zap, HandHeart, Package } from "lucide-react"
 import Link from "next/link"
 import AnnonceCard from "./components/AnnonceCard"
+import ServiceIndisponible from "./components/ServiceIndisponible"
 import { QUARTIERS, type Annonce } from "./lib/annonces"
 
 // Les chiffres et les dernieres annonces doivent refleter l'etat reel du site :
@@ -8,13 +9,14 @@ import { QUARTIERS, type Annonce } from "./lib/annonces"
 // qui restait faux jusqu'a la regeneration suivante.
 export const dynamic = "force-dynamic"
 
-type Accueil = { annonces: Annonce[]; disponibles: number; dons: number }
+// null = source injoignable : on affiche « – » plutôt qu'un 0 trompeur
+type Accueil = { annonces: Annonce[] | null; disponibles: number | null; dons: number | null }
 
 async function getAccueil(): Promise<Accueil> {
   const base = process.env.NEXT_PUBLIC_API_URL
-  let annonces: Annonce[] = []
-  let disponibles = 0
-  let dons = 0
+  let annonces: Annonce[] | null = null
+  let disponibles: number | null = null
+  let dons: number | null = null
 
   // Les deux sources sont interrogees separement : la panne de l'une
   // ne doit pas vider l'autre.
@@ -23,16 +25,20 @@ async function getAccueil(): Promise<Accueil> {
     fetch(`${base}/stats`, { cache: "no-store" }),
   ])
 
-  if (resListe.status === "fulfilled" && resListe.value.ok) {
-    const liste = await resListe.value.json()
-    annonces = (liste.annonces ?? []).slice(0, 6)
-    disponibles = liste.total ?? 0 // repli si /stats est indisponible
-  }
-  if (resStats.status === "fulfilled" && resStats.value.ok) {
-    const stats = await resStats.value.json()
-    disponibles = stats.annonces ?? disponibles
-    dons = stats.dons_realises ?? 0
-  }
+  try {
+    if (resListe.status === "fulfilled" && resListe.value.ok) {
+      const liste = await resListe.value.json()
+      annonces = (liste.annonces ?? []).slice(0, 6)
+      disponibles = liste.total ?? null // repli si /stats est indisponible
+    }
+  } catch {}
+  try {
+    if (resStats.status === "fulfilled" && resStats.value.ok) {
+      const stats = await resStats.value.json()
+      disponibles = stats.annonces ?? disponibles
+      dons = stats.dons_realises ?? null
+    }
+  } catch {}
 
   return { annonces, disponibles, dons }
 }
@@ -41,8 +47,8 @@ export default async function Home() {
   const { annonces, disponibles, dons } = await getAccueil()
 
   const chiffres = [
-    { valeur: disponibles, label: disponibles > 1 ? "objets à donner" : "objet à donner", Icon: Package },
-    { valeur: dons, label: dons > 1 ? "dons réalisés" : "don réalisé", Icon: HandHeart },
+    { valeur: disponibles ?? "–", label: (disponibles ?? 0) > 1 ? "objets à donner" : "objet à donner", Icon: Package },
+    { valeur: dons ?? "–", label: (dons ?? 0) > 1 ? "dons réalisés" : "don réalisé", Icon: HandHeart },
     { valeur: QUARTIERS.length, label: "quartiers couverts", Icon: MapPin },
   ]
 
@@ -90,7 +96,13 @@ export default async function Home() {
         </div>
       </section>
 
-      {annonces.length > 0 && (
+      {annonces === null && (
+        <section className="max-w-6xl mx-auto px-5 sm:px-6">
+          <ServiceIndisponible compact />
+        </section>
+      )}
+
+      {annonces !== null && annonces.length > 0 && (
         <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-14">
           <div className="flex items-end justify-between gap-3 mb-4 sm:mb-6">
             <div>

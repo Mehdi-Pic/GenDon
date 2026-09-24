@@ -6,6 +6,7 @@ import { CheckCircle, Upload, X } from "lucide-react"
 import Link from "next/link"
 import { CATEGORIES as categories, QUARTIERS as quartiers, vignette } from "../../../lib/annonces"
 import { useImageUpload } from "../../../lib/useImageUpload"
+import ServiceIndisponible from "../../../components/ServiceIndisponible"
 
 export default function ModifierAnnonce({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -19,6 +20,7 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
   const [submitted, setSubmitted] = useState(false)
   const [chargement, setChargement] = useState(true)
   const [introuvable, setIntrouvable] = useState(false)
+  const [indisponible, setIndisponible] = useState(false)
   const [erreurSubmit, setErreurSubmit] = useState("")
 
   const { images: nouvellesImages, setImages: setNouvellesImages, ajouterImages, uploadEnCours, slotsRestants, erreur: erreurUpload } = useImageUpload(imagesExistantes.length)
@@ -32,7 +34,8 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
     }
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}`)
       .then((res) => {
-        if (!res.ok) throw new Error("introuvable")
+        if (res.status === 404 || res.status === 422) throw new Error("introuvable")
+        if (!res.ok) throw new Error("indisponible")
         return res.json()
       })
       .then((data) => {
@@ -43,8 +46,10 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
         setImagesExistantes(data.images || [])
         setChargement(false)
       })
-      .catch(() => {
-        setIntrouvable(true)
+      .catch((e) => {
+        // Erreur réseau (fetch rejeté) ou serveur en panne : ce n'est pas une annonce supprimée
+        if (e instanceof Error && e.message === "introuvable") setIntrouvable(true)
+        else setIndisponible(true)
         setChargement(false)
       })
   }, [id, isLoaded, isSignedIn])
@@ -87,6 +92,16 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
   }
 
   if (!isSignedIn) return null
+
+  if (indisponible) {
+    return (
+      <main>
+        <div className="max-w-2xl mx-auto px-6 py-24">
+          <ServiceIndisponible />
+        </div>
+      </main>
+    )
+  }
 
   if (introuvable) {
     return (

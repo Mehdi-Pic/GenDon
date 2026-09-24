@@ -7,6 +7,7 @@ import Link from "next/link"
 import { ArrowLeft, Send } from "lucide-react"
 import { vignette } from "../../lib/annonces"
 import ConversationMenu from "../ConversationMenu"
+import ServiceIndisponible from "../../components/ServiceIndisponible"
 
 type Message = { id: number; contenu: string; created_at: string; a_moi: boolean; systeme?: boolean }
 type Fil = {
@@ -27,6 +28,8 @@ export default function Conversation({ params }: { params: Promise<{ id: string 
   const [fil, setFil] = useState<Fil | null>(null)
   const [chargement, setChargement] = useState(true)
   const [introuvable, setIntrouvable] = useState(false)
+  const [indisponible, setIndisponible] = useState(false)
+  const dejaCharge = useRef(false)
   const [texte, setTexte] = useState("")
   const [envoi, setEnvoi] = useState(false)
   const basRef = useRef<HTMLDivElement>(null)
@@ -42,11 +45,14 @@ export default function Conversation({ params }: { params: Promise<{ id: string 
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/conversations/${id}/messages`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) {
+      if (res.status === 403 || res.status === 404) {
         setIntrouvable(true)
         return
       }
+      if (!res.ok) throw new Error("serveur")
       const data: Fil = await res.json()
+      dejaCharge.current = true
+      setIndisponible(false)
       setFil(data)
       if (marquerLu) {
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/conversations/${id}/lu`, {
@@ -55,7 +61,8 @@ export default function Conversation({ params }: { params: Promise<{ id: string 
         }).catch(() => {})
       }
     } catch {
-      setIntrouvable(true)
+      // Déjà affichée : on garde la conversation, le prochain rafraîchissement réessaiera
+      if (!dejaCharge.current) setIndisponible(true)
     } finally {
       setChargement(false)
     }
@@ -122,6 +129,16 @@ export default function Conversation({ params }: { params: Promise<{ id: string 
       <main>
         <div className="max-w-2xl mx-auto px-6 py-12">
           <p className="text-gray-400">Chargement...</p>
+        </div>
+      </main>
+    )
+  }
+
+  if (indisponible && !fil) {
+    return (
+      <main>
+        <div className="max-w-2xl mx-auto px-6 py-12">
+          <ServiceIndisponible />
         </div>
       </main>
     )

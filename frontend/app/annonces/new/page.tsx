@@ -15,7 +15,7 @@ type Errors = {
 }
 
 export default function NewAnnonce() {
-  const { user, isLoaded } = useUser()
+  const { isLoaded } = useUser()
   const { getToken, isSignedIn } = useAuth()
   const [titre, setTitre] = useState("")
   const [description, setDescription] = useState("")
@@ -46,6 +46,8 @@ export default function NewAnnonce() {
   }
 
   function supprimerImage(index: number) {
+    const retiree = imageStates[index]
+    if (retiree) URL.revokeObjectURL(retiree.preview)
     setImageStates((prev) => prev.filter((_, i) => i !== index))
   }
 
@@ -78,9 +80,7 @@ export default function NewAnnonce() {
           description,
           categorie,
           quartier,
-          pseudo: user?.username || user?.firstName || "Anonyme",
           images: imageUrls,
-          statut: "publiee",
         }),
       })
       if (!response.ok) throw new Error("La publication a échoué, réessayez")

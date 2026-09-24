@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, use } from "react"
-import { useUser, useAuth } from "@clerk/nextjs"
+import { useAuth } from "@clerk/nextjs"
 import { CheckCircle, Upload, X } from "lucide-react"
 import Link from "next/link"
 import { CATEGORIES as categories, QUARTIERS as quartiers, vignette } from "../../../lib/annonces"
@@ -9,7 +9,6 @@ import { useImageUpload } from "../../../lib/useImageUpload"
 
 export default function ModifierAnnonce({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const { user } = useUser()
   const { isLoaded, isSignedIn, getToken } = useAuth()
   const [titre, setTitre] = useState("")
   const [description, setDescription] = useState("")
@@ -65,9 +64,7 @@ export default function ModifierAnnonce({ params }: { params: Promise<{ id: stri
           description,
           categorie,
           quartier,
-          pseudo: user?.username || user?.firstName || "Anonyme",
           images: [...imagesExistantes, ...urlsNouvellesImages],
-          statut: "publiee",
         }),
       })
       if (!response.ok) throw new Error("Impossible d'enregistrer les modifications")

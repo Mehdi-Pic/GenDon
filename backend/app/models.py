@@ -47,7 +47,7 @@ class Signalement(Base):
     id = Column(Integer, primary_key=True, index=True)
     annonce_id = Column(Integer, ForeignKey("annonces.id", ondelete="CASCADE"), nullable=False)
     clerk_user_id = Column(String(100), nullable=False)
-    raison = Column(String(500), nullable=False)
+    raison = Column(Text, nullable=False)
     traite = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -110,4 +110,16 @@ class DonRealise(Base):
     id = Column(Integer, primary_key=True, index=True)
     clerk_user_id = Column(String(100), nullable=True)
     titre = Column(String(100), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ImageUploadee(Base):
+    """Registre des images envoyees via /upload : une annonce ne peut referencer que les images
+    de son auteur, et les images jamais publiees sont nettoyees automatiquement."""
+    __tablename__ = "images_uploadees"
+
+    id = Column(Integer, primary_key=True, index=True)
+    url = Column(String(500), nullable=False, unique=True, index=True)
+    public_id = Column(String(300), nullable=False)
+    clerk_user_id = Column(String(100), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

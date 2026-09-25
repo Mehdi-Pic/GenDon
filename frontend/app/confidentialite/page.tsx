@@ -1,4 +1,6 @@
 import type { Metadata } from "next"
+import Link from "next/link"
+import AdresseProtegee from "../components/AdresseProtegee"
 
 export const metadata: Metadata = {
   title: "Politique de confidentialité · Gen Don",
@@ -16,8 +18,8 @@ export default function Confidentialite() {
           <h2 className="text-xl font-bold text-gray-900 mb-3">Responsable du traitement</h2>
           <p className="text-gray-600 leading-relaxed">
             Le responsable du traitement des données collectées sur <strong>gendon.fr</strong> est
-            l&apos;éditeur du site : Mehdi Pichard,{" "}
-            <a href="mailto:[adresse retirée]" className="text-green-600 hover:underline">[adresse retirée]</a>.
+            l&apos;éditeur du site : Mehdi Pichard, joignable via le{" "}
+            <Link href="/contact" className="text-green-600 hover:underline">formulaire de contact</Link> ou par e-mail (<AdresseProtegee />).
           </p>
         </section>
 
@@ -93,8 +95,8 @@ export default function Confidentialite() {
           <p className="text-gray-600 leading-relaxed">
             Conformément au RGPD, vous disposez d&apos;un droit d&apos;accès, de rectification,
             d&apos;effacement, de limitation et d&apos;opposition sur vos données. Pour exercer ces
-            droits, écrivez à{" "}
-            <a href="mailto:[adresse retirée]" className="text-green-600 hover:underline">[adresse retirée]</a>.
+            droits, utilisez le{" "}
+            <Link href="/contact" className="text-green-600 hover:underline">formulaire de contact</Link> ou écrivez par e-mail (<AdresseProtegee />).
             Vous pouvez également introduire une réclamation auprès de la CNIL (<a href="https://www.cnil.fr" className="text-green-600 hover:underline" target="_blank" rel="noopener noreferrer">cnil.fr</a>).
           </p>
         </section>

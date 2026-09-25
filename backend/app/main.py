@@ -24,6 +24,8 @@ from apscheduler.triggers.cron import CronTrigger
 from svix.webhooks import Webhook, WebhookVerificationError
 import hmac
 import hashlib
+import io
+from PIL import Image, ImageOps, ImageSequence, UnidentifiedImageError
 import anyio.to_thread
 import threading
 import time
@@ -629,6 +631,45 @@ async def webhook_clerk(request: Request):
 
 
 TYPES_IMAGE_AUTORISES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+FORMATS_IMAGE_AUTORISES = {"JPEG", "PNG", "WEBP", "GIF"}
+
+
+def nettoyer_metadonnees(contenu: bytes) -> bytes:
+    """Réencode l'image sans ses métadonnées (EXIF, GPS, XMP, commentaires).
+    Une photo prise au téléphone contient souvent la position GPS de la prise de vue,
+    c'est-à-dire, pour un don, le domicile du donneur."""
+    try:
+        with Image.open(io.BytesIO(contenu)) as image:
+            format_image = image.format
+            if format_image not in FORMATS_IMAGE_AUTORISES:
+                raise HTTPException(status_code=400, detail="Format d'image non pris en charge")
+            sortie = io.BytesIO()
+            # Le profil de couleur n'est pas une donnée personnelle : on le garde pour ne pas ternir les photos
+            profil = image.info.get("icc_profile")
+            if format_image == "GIF":
+                images = [trame.copy() for trame in ImageSequence.Iterator(image)]
+                for trame in images:
+                    trame.info.pop("comment", None)
+                images[0].save(
+                    sortie, format="GIF", save_all=True, append_images=images[1:],
+                    loop=image.info.get("loop", 0), duration=image.info.get("duration", 100),
+                )
+            else:
+                # Applique la rotation indiquée dans l'EXIF avant de le supprimer, sinon la photo s'afficherait couchée
+                propre = ImageOps.exif_transpose(image)
+                options = {"icc_profile": profil} if profil else {}
+                if format_image in ("JPEG", "WEBP"):
+                    options["quality"] = 92
+                if format_image == "JPEG" and propre.mode not in ("RGB", "L", "CMYK"):
+                    propre = propre.convert("RGB")
+                if format_image == "PNG" and "transparency" in image.info:
+                    options["transparency"] = image.info["transparency"]
+                propre.save(sortie, format=format_image, **options)
+            return sortie.getvalue()
+    except HTTPException:
+        raise
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+        raise HTTPException(status_code=400, detail="Image illisible ou corrompue")
 TAILLE_MAX_IMAGE = 10 * 1024 * 1024  # 10 Mo
 
 
@@ -651,7 +692,7 @@ def upload_images(
         if len(contenu) > TAILLE_MAX_IMAGE:
             raise HTTPException(status_code=400, detail="Image trop volumineuse (max 10 Mo)")
         resultat = cloudinary.uploader.upload(
-            contenu,
+            nettoyer_metadonnees(contenu),
             folder="gendon",
             transformation=[{"quality": "auto", "fetch_format": "auto"}],
         )

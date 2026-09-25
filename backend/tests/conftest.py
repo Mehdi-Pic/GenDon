@@ -33,11 +33,13 @@ class FauxServices:
 
     def __init__(self):
         self.uploads = 0
+        self.contenus_envoyes = []  # octets réellement transmis à Cloudinary
         self.images_detruites = []
         self.notifications = []
         self.lots_newsletter = []
 
     def upload(self, contenu, **kwargs):
+        self.contenus_envoyes.append(contenu)
         self.uploads += 1
         n = self.uploads
         return {

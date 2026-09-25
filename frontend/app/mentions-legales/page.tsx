@@ -1,4 +1,6 @@
 import type { Metadata } from "next"
+import Link from "next/link"
+import AdresseProtegee from "../components/AdresseProtegee"
 
 export const metadata: Metadata = {
   title: "Mentions légales · Gen Don",
@@ -20,7 +22,7 @@ export default function MentionsLegales() {
           </p>
           <p className="text-gray-600 leading-relaxed mt-2">
             Éditeur : Mehdi Pichard<br />
-            Contact : <a href="mailto:pichardmehdi@gmail.com" className="text-green-600 hover:underline">pichardmehdi@gmail.com</a>
+            Contact : <Link href="/contact" className="text-green-600 hover:underline">formulaire de contact</Link> ou e-mail (<AdresseProtegee />)
           </p>
         </section>
 
@@ -61,7 +63,8 @@ export default function MentionsLegales() {
             Les annonces sont automatiquement supprimées 30 jours après leur publication.
           </p>
           <p className="text-gray-600 leading-relaxed mt-2">
-            Pour signaler un contenu : <a href="mailto:pichardmehdi@gmail.com" className="text-green-600 hover:underline">pichardmehdi@gmail.com</a>
+            Pour signaler un contenu : bouton « Signaler » sur l&apos;annonce, <Link href="/contact" className="text-green-600 hover:underline">formulaire de contact</Link> ou e-mail
+            (<AdresseProtegee />)
           </p>
         </section>
 
@@ -77,7 +80,7 @@ export default function MentionsLegales() {
           <h2 className="text-xl font-bold text-gray-900 mb-3">Données personnelles</h2>
           <p className="text-gray-600 leading-relaxed">
             Le traitement des données personnelles est détaillé dans la{" "}
-            <a href="/confidentialite" className="text-green-600 hover:underline">politique de confidentialité</a>.
+            <Link href="/confidentialite" className="text-green-600 hover:underline">politique de confidentialité</Link>.
           </p>
         </section>
       </div>

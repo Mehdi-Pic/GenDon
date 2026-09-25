@@ -16,3 +16,10 @@ frontend/.env.local
 .DS_Store
 *.log
 .claude/
+
+# Secrets et exports de base : ne jamais commiter
+.env
+.env.*
+!.env.example
+*.sql
+*.dump

@@ -23,6 +23,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from svix.webhooks import Webhook, WebhookVerificationError
 import hmac
+import re
 import hashlib
 import io
 from PIL import Image, ImageOps, ImageSequence, UnidentifiedImageError
@@ -139,7 +140,7 @@ app.add_middleware(
 # Rate limiting en mémoire par utilisateur (1 seule instance Railway).
 _appels: dict = defaultdict(deque)
 _verrou_appels = threading.Lock()
-FENETRE_MAX_SECONDES = 3600  # plus grande fenêtre utilisée : sert au nettoyage
+FENETRE_MAX_SECONDES = 24 * 3600  # plus grande fenêtre utilisée (plafond quotidien du contact) : sert au nettoyage
 
 
 def limite_atteinte(user_id: str, action: str, maximum: int, fenetre_secondes: int, poids: int = 1) -> bool:
@@ -1167,6 +1168,7 @@ def admin_changer_role(
             db.add(models.Role(clerk_user_id=uid, role=data.role))
         db.commit()
     journaliser(db, acteur["user_id"], "changement_role", f"{uid} → {data.role}")
+    _cache_emails_equipe["expire"] = 0.0  # l'équipe a changé : destinataires du contact à relire
     return {"role": None if data.role == "aucun" else data.role}
 
 
@@ -1708,8 +1710,27 @@ class MessageContactSite(PydanticBase):
     site_web: str = Field(default="", max_length=200)
 
 
+# Plafonds GLOBAUX du formulaire, tous expéditeurs confondus. La limite par IP ne suffit pas :
+# un robot qui change d'IP à chaque envoi pourrait sinon épuiser le quota Resend et bloquer
+# tous les emails du site (notifications, rappels, newsletter).
+CONTACT_MAX_PAR_HEURE = 20
+CONTACT_MAX_PAR_JOUR = 50
+REGEX_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
+DUREE_CACHE_EQUIPE = 600  # secondes
+
+_cache_emails_equipe = {"emails": [], "expire": 0.0}
+
+
+def _une_ligne(texte: str) -> str:
+    """Retire retours à la ligne et caractères de contrôle (sujet, nom : pas d'en-tête injectable)."""
+    return " ".join("".join(c if c.isprintable() else " " for c in texte).split())
+
+
 def _emails_equipe(db: Session) -> list:
-    """Emails des administrateurs (variable Railway) et des modérateurs (table roles)."""
+    """Emails des administrateurs (variable Railway) et des modérateurs (table roles).
+    Mis en cache 10 minutes : sans cela, chaque envoi interrogeait Clerk une fois par membre."""
+    if time.monotonic() < _cache_emails_equipe["expire"] and _cache_emails_equipe["emails"]:
+        return list(_cache_emails_equipe["emails"])
     identifiants = set(_admins_principaux())
     identifiants.update(r.clerk_user_id for r in db.query(models.Role).all())
     headers = {"Authorization": f"Bearer {os.getenv('CLERK_SECRET_KEY')}"}
@@ -1723,6 +1744,9 @@ def _emails_equipe(db: Session) -> list:
                     emails.append(adresse)
         except Exception:
             continue
+    if emails:
+        _cache_emails_equipe["emails"] = emails
+        _cache_emails_equipe["expire"] = time.monotonic() + DUREE_CACHE_EQUIPE
     return emails
 
 
@@ -1738,12 +1762,23 @@ def contacter_equipe(
         return {"ok": True}
 
     expediteur = data.email.strip()
-    if "@" not in expediteur or "." not in expediteur.split("@")[-1]:
+    if not REGEX_EMAIL.match(expediteur):
         raise HTTPException(status_code=400, detail="Adresse email invalide")
+    nom = _une_ligne(data.nom)
+    sujet = _une_ligne(data.sujet)
+    if not nom or len(sujet) < 3:
+        raise HTTPException(status_code=400, detail="Nom ou sujet invalide")
 
     # Anti-spam : par compte si connecté, sinon par adresse IP
     cle = user_id or ip_client(request)
     verifier_rate_limit(cle, "contact_site", maximum=3, fenetre_secondes=3600)
+    # Puis plafonds globaux (comptés seulement si l'expéditeur a passé sa propre limite)
+    if limite_atteinte("tous", "contact_site_heure", CONTACT_MAX_PAR_HEURE, 3600) or limite_atteinte(
+        "tous", "contact_site_jour", CONTACT_MAX_PAR_JOUR, 24 * 3600
+    ):
+        raise HTTPException(
+            status_code=429, detail="Le formulaire reçoit trop de messages en ce moment, réessayez plus tard"
+        )
 
     destinataires = _emails_equipe(db)
     if not destinataires:
@@ -1755,13 +1790,13 @@ def contacter_equipe(
             "from": f"GenDon <{os.getenv('RESEND_FROM_EMAIL', 'onboarding@resend.dev')}>",
             "to": destinataires,
             "reply_to": expediteur,
-            "subject": f"[Contact GenDon] {data.sujet.strip()}",
+            "subject": f"[Contact GenDon] {sujet}",
             "html": f"""
             <div style="font-family:sans-serif;max-width:560px;margin:auto;color:#111">
               <p style="font-size:18px;font-weight:700;margin-bottom:4px">Nouveau message via le formulaire de contact</p>
               <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
-              <p><strong>De :</strong> {escape(data.nom.strip())} ({escape(expediteur)})</p>
-              <p><strong>Sujet :</strong> {escape(data.sujet.strip())}</p>
+              <p><strong>De :</strong> {escape(nom)} ({escape(expediteur)})</p>
+              <p><strong>Sujet :</strong> {escape(sujet)}</p>
               <p><strong>Message :</strong></p>
               <blockquote style="background:#f9fafb;border-left:3px solid #d1d5db;padding:12px 16px;margin:0;border-radius:4px;color:#374151;white-space:pre-wrap">{escape(data.message.strip())}</blockquote>
               <p style="margin-top:20px;color:#6b7280;font-size:13px">Répondez directement à cet email pour joindre l'expéditeur.</p>

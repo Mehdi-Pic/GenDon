@@ -58,6 +58,7 @@ def base_vide():
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
     main._appels.clear()
+    main._cache_emails_equipe.update(emails=[], expire=0.0)
     yield
 
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Upload, X, CheckCircle } from "lucide-react"
-import { useUser, useAuth, SignInButton } from "@clerk/nextjs"
+import { useUser, useAuth, SignInButton, SignUpButton } from "@clerk/nextjs"
 import Link from "next/link"
 import { CATEGORIES as categories, QUARTIERS as quartiers } from "../../lib/annonces"
 import { useImageUpload } from "../../lib/useImageUpload"
@@ -35,11 +35,18 @@ export default function NewAnnonce() {
         <div className="max-w-2xl mx-auto px-6 py-24 text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Connectez-vous pour déposer un don</h1>
           <p className="text-gray-500 mb-8">La création d&apos;une annonce nécessite un compte, c&apos;est gratuit et rapide.</p>
-          <SignInButton mode="modal">
-            <button className="bg-green-600 hover:bg-green-500 hover:shadow-lg hover:shadow-green-200 text-white px-8 py-3 rounded-full font-semibold transition-all">
-              Se connecter
-            </button>
-          </SignInButton>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <SignUpButton mode="modal">
+              <button className="w-full sm:w-auto bg-green-600 hover:bg-green-500 hover:shadow-lg hover:shadow-green-200 text-white px-8 py-3 rounded-full font-semibold transition-all">
+                Créer un compte
+              </button>
+            </SignUpButton>
+            <SignInButton mode="modal">
+              <button className="w-full sm:w-auto border border-gray-300 hover:border-gray-900 text-gray-900 px-8 py-3 rounded-full font-semibold transition-colors">
+                Se connecter
+              </button>
+            </SignInButton>
+          </div>
         </div>
       </main>
     )

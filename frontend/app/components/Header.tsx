@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect } from "react"
 import { Search, Plus, MessageCircle, User } from "lucide-react"
 import { useSearchParams, useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import { SignInButton, Show, UserButton, useAuth } from "@clerk/nextjs"
+import { SignInButton, SignUpButton, Show, UserButton, useAuth } from "@clerk/nextjs"
 import { CATEGORIES as categories } from "../lib/annonces"
 
 function MessagesLink() {
@@ -129,10 +129,17 @@ export default function Header() {
         <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
           <Show when="signed-out">
             <SignInButton mode="modal">
-              <button className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+              <button className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors whitespace-nowrap">
                 Se connecter
               </button>
             </SignInButton>
+            {/* Secondaire : le vert reste reserve a "Deposer un don". Masque sous 360px pour
+                que le header tienne sur une ligne ; la fenetre de connexion propose l'inscription. */}
+            <SignUpButton mode="modal">
+              <button className="max-[359px]:hidden text-sm font-semibold text-gray-900 border border-gray-300 hover:border-gray-900 px-3 sm:px-4 py-2 rounded-full transition-colors whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-gray-200">
+                S&apos;inscrire
+              </button>
+            </SignUpButton>
           </Show>
           <Show when="signed-in">
             <MessagesLink />

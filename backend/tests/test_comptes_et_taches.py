@@ -159,3 +159,28 @@ def test_cors_autorise_put_depuis_le_site(client):
     })
     assert reponse.status_code == 200
     assert "PUT" in reponse.headers["access-control-allow-methods"]
+
+
+# ---------- Minimisation des données côté équipe ----------
+
+def test_emails_reserves_aux_admins(client, utilisateur, db, monkeypatch):
+    compte = {"id": "u9", "username": "bob", "primary_email_address_id": "e",
+              "email_addresses": [{"id": "e", "email_address": "bob@x.fr"}]}
+    monkeypatch.setattr(main, "_tous_les_utilisateurs_clerk", lambda: [compte])
+
+    db.add(models.Role(clerk_user_id="u1", role="moderateur"))
+    db.commit()
+    assert client.get("/admin/utilisateurs").json()[0]["email"] is None
+
+    monkeypatch.setenv("ADMIN_USER_ID", "u1")
+    assert client.get("/admin/utilisateurs").json()[0]["email"] == "bob@x.fr"
+
+
+def test_journal_purge_apres_un_an(db):
+    ancien = datetime.now(timezone.utc) - timedelta(days=main.DUREE_JOURNAL_MODERATION_JOURS + 1)
+    db.add(models.ActionModeration(clerk_user_id="m1", action="vieux", created_at=ancien))
+    db.add(models.ActionModeration(clerk_user_id="m1", action="recent"))
+    db.commit()
+    main.purger_journal_moderation()
+    db.expire_all()
+    assert [a.action for a in db.query(models.ActionModeration).all()] == ["recent"]

@@ -99,6 +99,7 @@ async def lifespan(app: FastAPI):
     options = {"misfire_grace_time": 3600, "coalesce": True}
     scheduler.add_job(purger_annonces_expirees, CronTrigger(hour=3, minute=0, timezone="Europe/Paris"), **options)
     scheduler.add_job(purger_images_orphelines, CronTrigger(hour=3, minute=30, timezone="Europe/Paris"), **options)
+    scheduler.add_job(purger_journal_moderation, CronTrigger(hour=3, minute=45, timezone="Europe/Paris"), **options)
     scheduler.add_job(envoyer_rappels_expiration, CronTrigger(hour=10, minute=0, timezone="Europe/Paris"), **options)
     scheduler.add_job(nettoyer_rate_limit, "interval", minutes=30)
     scheduler.add_job(
@@ -281,6 +282,22 @@ def purger_images_orphelines():
                 supprimer_images_cloudinary([image.url])
             except Exception:
                 db.rollback()
+    finally:
+        db.close()
+
+
+DUREE_JOURNAL_MODERATION_JOURS = 365
+
+
+def purger_journal_moderation():
+    """Le journal cite pseudos et titres d'annonces : il n'est conservé qu'un an."""
+    db = SessionLocal()
+    try:
+        limite = datetime.now(timezone.utc) - timedelta(days=DUREE_JOURNAL_MODERATION_JOURS)
+        db.query(models.ActionModeration).filter(models.ActionModeration.created_at < limite).delete()
+        db.commit()
+    except Exception:
+        db.rollback()
     finally:
         db.close()
 
@@ -1122,13 +1139,15 @@ def admin_lister_utilisateurs(
     )
     roles = {r.clerk_user_id: r.role for r in db.query(models.Role).all()}
     admins = _admins_principaux()
+    # Les modérateurs n'ont pas besoin des adresses email pour modérer : réservées aux admins
+    voit_emails = acteur["role"] == "admin"
     utilisateurs = []
     for u in comptes_clerk:
         uid = u["id"]
         utilisateurs.append({
             "id": uid,
             "pseudo": u.get("username") or u.get("first_name") or "(sans pseudo)",
-            "email": _email_principal(u),
+            "email": _email_principal(u) if voit_emails else None,
             "image": u.get("image_url"),
             "created_at": u.get("created_at"),
             "nb_annonces": comptes.get(uid, 0),

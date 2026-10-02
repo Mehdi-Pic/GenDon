@@ -12,7 +12,7 @@ export default function Confidentialite() {
     <main>
       <div className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-black text-gray-900 mb-2">Politique de confidentialité</h1>
-        <p className="text-sm text-gray-400 mb-10">Dernière mise à jour : juin 2026</p>
+        <p className="text-sm text-gray-400 mb-10">Dernière mise à jour : octobre 2026</p>
 
         <section className="mb-8">
           <h2 className="text-xl font-bold text-gray-900 mb-3">Responsable du traitement</h2>
@@ -45,6 +45,26 @@ export default function Confidentialite() {
               participants ont quitté la conversation, lorsque l&apos;annonce est supprimée, ou lors de la
               suppression du compte. Vos adresses email ne sont jamais communiquées à l&apos;autre personne.
             </li>
+            <li>
+              <strong>Favoris et signalements</strong> : les annonces que vous mettez en favori, et les
+              signalements que vous envoyez (motif et identifiant de votre compte) pour permettre leur traitement.
+            </li>
+            <li>
+              <strong>Formulaire de contact</strong> : nom, adresse email, sujet et message. Ils ne sont pas
+              stockés sur le site : ils sont transmis par email à l&apos;équipe (administrateurs et
+              modérateurs) pour vous répondre.
+            </li>
+            <li>
+              <strong>Données techniques</strong> : votre adresse IP est utilisée, en mémoire uniquement et
+              pendant 24 heures au plus, pour limiter les abus (envois répétés) et ne compter qu&apos;une vue
+              par visiteur sur une annonce. Elle n&apos;est pas enregistrée en base de données. Nos hébergeurs
+              conservent par ailleurs des journaux techniques pour la sécurité du service.
+            </li>
+            <li>
+              <strong>Mesure d&apos;audience</strong> : le site utilise Vercel Web Analytics pour compter les
+              pages vues de façon agrégée. Cet outil ne dépose aucun cookie et ne permet pas de vous suivre
+              d&apos;un site à l&apos;autre ni d&apos;un jour à l&apos;autre.
+            </li>
           </ul>
           <p className="text-gray-600 leading-relaxed mt-3">
             Aucune donnée n&apos;est revendue ni utilisée à des fins publicitaires.
@@ -59,6 +79,11 @@ export default function Confidentialite() {
             légale est l&apos;exécution du service demandé par l&apos;utilisateur (art. 6.1.b du RGPD).
           </p>
           <p className="text-gray-600 leading-relaxed mt-3">
+            La modération (signalements, retrait de contenus), la lutte contre les abus, la mesure
+            d&apos;audience et les réponses au formulaire de contact reposent sur l&apos;intérêt légitime
+            de GenDon à assurer un service sûr et à vous répondre (art. 6.1.f du RGPD).
+          </p>
+          <p className="text-gray-600 leading-relaxed mt-3">
             La lettre d&apos;information hebdomadaire repose sur l&apos;intérêt légitime de GenDon à faire
             connaître les dons disponibles à ses membres (art. 6.1.f du RGPD). Vous pouvez vous y opposer
             à tout moment, sans justification, via le lien de désabonnement présent dans chaque envoi
@@ -70,10 +95,15 @@ export default function Confidentialite() {
           <h2 className="text-xl font-bold text-gray-900 mb-3">Sous-traitants</h2>
           <ul className="list-disc pl-5 text-gray-600 leading-relaxed flex flex-col gap-2">
             <li><strong>Clerk Inc.</strong> (États-Unis) : authentification et gestion des comptes.</li>
-            <li><strong>Cloudinary Ltd.</strong> : hébergement des photos d&apos;annonces.</li>
+            <li><strong>Cloudinary Ltd.</strong> (Israël, serveurs aux États-Unis) : hébergement des photos d&apos;annonces.</li>
             <li><strong>Resend Inc.</strong> (États-Unis) : envoi des emails (notifications de messages, rappels d&apos;expiration, lettre d&apos;information).</li>
-            <li><strong>Vercel Inc.</strong> et <strong>Railway Corp.</strong> (États-Unis) : hébergement du site et de la base de données.</li>
+            <li><strong>Vercel Inc.</strong> et <strong>Railway Corp.</strong> (États-Unis) : hébergement du site et de la base de données, mesure d&apos;audience (Vercel).</li>
           </ul>
+          <p className="text-gray-600 leading-relaxed mt-3">
+            Au sein de l&apos;équipe, les modérateurs bénévoles voient les annonces, les signalements et les
+            pseudos des comptes, mais pas leurs adresses email, réservées aux administrateurs. Ni les uns ni
+            les autres n&apos;ont accès au contenu des conversations privées depuis le site.
+          </p>
           <p className="text-gray-600 leading-relaxed mt-3">
             Ces prestataires peuvent être situés hors de l&apos;Union européenne ; ils s&apos;appuient sur
             des clauses contractuelles types pour encadrer les transferts de données.
@@ -86,7 +116,9 @@ export default function Confidentialite() {
             <li>Les <strong>annonces</strong> (textes et photos) sont automatiquement supprimées <strong>30 jours</strong> après leur publication (ou leur dernier renouvellement), <strong>3 jours</strong> après avoir été déclarées données, ou dès leur suppression par l&apos;utilisateur.</li>
             <li>Les <strong>photos envoyées mais jamais publiées</strong> sont supprimées sous 48 heures.</li>
             <li>À la suppression du compte, les dons réalisés restent comptabilisés de façon anonyme (sans lien avec votre compte ni titre d&apos;annonce).</li>
-            <li>Le <strong>compte utilisateur</strong> est conservé tant qu&apos;il est actif ; sa suppression peut être demandée à tout moment.</li>
+            <li>Le <strong>journal de modération</strong> (actions de l&apos;équipe, pouvant citer un pseudo ou un titre d&apos;annonce) est conservé <strong>1 an</strong>.</li>
+            <li>Les <strong>messages du formulaire de contact</strong> sont conservés dans la boîte email de l&apos;équipe le temps de traiter la demande.</li>
+            <li>Le <strong>compte utilisateur</strong> est conservé tant qu&apos;il est actif. Vous pouvez le supprimer vous-même à tout moment (menu du compte en haut à droite, « Gérer le compte ») : vos annonces, photos, messages, favoris et signalements sont alors effacés.</li>
           </ul>
         </section>
 
@@ -94,7 +126,7 @@ export default function Confidentialite() {
           <h2 className="text-xl font-bold text-gray-900 mb-3">Vos droits</h2>
           <p className="text-gray-600 leading-relaxed">
             Conformément au RGPD, vous disposez d&apos;un droit d&apos;accès, de rectification,
-            d&apos;effacement, de limitation et d&apos;opposition sur vos données. Pour exercer ces
+            d&apos;effacement, de limitation, d&apos;opposition et de portabilité sur vos données. Pour exercer ces
             droits, utilisez le{" "}
             <Link href="/contact" className="text-green-600 hover:underline">formulaire de contact</Link> ou écrivez par e-mail (<AdresseProtegee />).
             Vous pouvez également introduire une réclamation auprès de la CNIL (<a href="https://www.cnil.fr" className="text-green-600 hover:underline" target="_blank" rel="noopener noreferrer">cnil.fr</a>).
@@ -104,9 +136,10 @@ export default function Confidentialite() {
         <section>
           <h2 className="text-xl font-bold text-gray-900 mb-3">Cookies</h2>
           <p className="text-gray-600 leading-relaxed">
-            GenDon n&apos;utilise pas de cookies publicitaires ni de traceurs tiers. Seuls des cookies
-            strictement nécessaires au fonctionnement du site sont déposés (session
-            d&apos;authentification Clerk), exemptés de consentement au titre de la réglementation.
+            GenDon n&apos;utilise pas de cookies publicitaires. Seuls des cookies strictement nécessaires au
+            fonctionnement du site sont déposés (session d&apos;authentification Clerk), exemptés de
+            consentement au titre de la réglementation. La mesure d&apos;audience (Vercel Web Analytics)
+            fonctionne sans cookie.
           </p>
         </section>
       </div>

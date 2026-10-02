@@ -87,7 +87,7 @@ export default function AdminUtilisateurs() {
           type="text"
           value={filtre}
           onChange={(e) => setFiltre(e.target.value)}
-          placeholder="Rechercher un pseudo ou un email..."
+          placeholder={monRole === "admin" ? "Rechercher un pseudo ou un email..." : "Rechercher un pseudo..."}
           aria-label="Rechercher un utilisateur"
           className="w-full pl-10 pr-4 py-2.5 bg-gray-100 border border-transparent rounded-full text-sm focus:outline-none focus:border-green-500 focus:bg-white transition-all"
         />
@@ -116,7 +116,9 @@ export default function AdminUtilisateurs() {
                     <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full"><Shield className="w-3 h-3" />Modérateur</span>
                   )}
                 </div>
-                <p className="text-xs text-gray-400 truncate">{u.email ?? "email inconnu"}</p>
+                {monRole === "admin" && (
+                  <p className="text-xs text-gray-400 truncate">{u.email ?? "email inconnu"}</p>
+                )}
                 <p className="text-xs text-gray-400">
                   inscrit le {new Date(u.created_at).toLocaleDateString("fr-FR")} · {u.nb_annonces} annonce{u.nb_annonces > 1 ? "s" : ""}
                 </p>

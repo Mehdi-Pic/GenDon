@@ -12,7 +12,7 @@ export default function MentionsLegales() {
     <main>
       <div className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-black text-gray-900 mb-2">Mentions légales</h1>
-        <p className="text-sm text-gray-400 mb-10">Dernière mise à jour : juin 2026</p>
+        <p className="text-sm text-gray-400 mb-10">Dernière mise à jour : octobre 2026</p>
 
         <section className="mb-8">
           <h2 className="text-xl font-bold text-gray-900 mb-3">Éditeur du site</h2>

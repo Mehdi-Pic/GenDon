@@ -3,7 +3,7 @@
 import { useUser, useAuth } from "@clerk/nextjs"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { MapPin, Pencil, Trash2, Eye, Heart, RefreshCw, HandHeart, Mail } from "lucide-react"
+import { MapPin, Pencil, Trash2, Eye, Heart, RefreshCw, HandHeart, Mail, ShieldCheck, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import AnnonceCard from "../components/AnnonceCard"
 import ServiceIndisponible from "../components/ServiceIndisponible"
@@ -23,6 +23,8 @@ export default function Profil() {
   // null tant que la préférence n'est pas connue : l'interrupteur reste masqué
   const [newsletter, setNewsletter] = useState<boolean | null>(null)
   const [erreurNewsletter, setErreurNewsletter] = useState("")
+  // Rôle staff renvoyé par le serveur ; null pour un utilisateur ordinaire (403 attendu)
+  const [roleStaff, setRoleStaff] = useState<string | null>(null)
   const [renouvellement, setRenouvellement] = useState<number | null>(null)
   const [don, setDon] = useState<number | null>(null)
   // Heure de référence figée à l'ouverture de la page : le rendu reste stable
@@ -70,6 +72,23 @@ export default function Profil() {
           headers: { Authorization: `Bearer ${token}` },
         })
         if (actif && res.ok) setNewsletter((await res.json()).abonne)
+      } catch {}
+    })()
+    return () => { actif = false }
+  }, [isLoaded, isSignedIn, getToken])
+
+  // Accès au panel d'administration : affiché seulement si le serveur reconnaît le rôle.
+  // Purement cosmétique, chaque endpoint /admin re-vérifie le rôle en base.
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+    let actif = true
+    ;(async () => {
+      try {
+        const token = await getToken()
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/moi`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (actif && res.ok) setRoleStaff((await res.json()).role ?? null)
       } catch {}
     })()
     return () => { actif = false }
@@ -194,6 +213,22 @@ export default function Profil() {
     <main>
       <div className="max-w-4xl mx-auto px-6 py-12">
         <h1 className="text-2xl font-black text-gray-900 mb-6">Mon profil</h1>
+
+        {roleStaff && (
+          <Link
+            href="/admin"
+            className="flex items-center gap-3 bg-gray-900 hover:bg-gray-700 text-white rounded-2xl px-5 py-4 mb-8 transition-colors"
+          >
+            <ShieldCheck className="w-5 h-5 text-green-400 shrink-0" aria-hidden="true" />
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-semibold">Administration</span>
+              <span className="block text-xs text-gray-300">
+                Accès {roleStaff === "admin" ? "administrateur" : "modérateur"} au tableau de bord
+              </span>
+            </span>
+            <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" aria-hidden="true" />
+          </Link>
+        )}
 
         <div className="flex items-center gap-2 mb-8">
           <button

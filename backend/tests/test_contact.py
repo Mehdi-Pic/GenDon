@@ -1,7 +1,7 @@
 """Formulaire de contact : anti-robot, limites par expéditeur et globales, champs nettoyés."""
 import pytest
 
-from app import main
+from app import main, models
 
 
 def message(**champs):
@@ -126,3 +126,30 @@ def test_adresses_equipe_en_cache(client, monkeypatch, anonyme):
 def test_adresses_equipe_jamais_renvoyees(client, envois, anonyme):
     reponse = client.post("/contact", json=message(), headers=visiteur("203.0.113.1"))
     assert "equipe@exemple.fr" not in reponse.text
+
+
+def test_adresse_du_site_remplace_celle_des_admins(db, monkeypatch):
+    """Avec CONTACT_EMAIL, les admins principaux reçoivent via l'adresse du site ; les modérateurs gardent la leur."""
+    monkeypatch.setenv("ADMIN_USER_ID", "admin1")
+    monkeypatch.setenv("CONTACT_EMAIL", "contact@gendon.fr")
+    db.add(models.Role(clerk_user_id="modo1", role="moderateur"))
+    db.commit()
+    appels = []
+
+    class Reponse:
+        is_success = True
+
+        def __init__(self, uid):
+            self.uid = uid
+
+        def json(self):
+            return {"primary_email_address_id": "e", "email_addresses": [{"id": "e", "email_address": f"{self.uid}@perso.fr"}]}
+
+    def faux_get(url, **kwargs):
+        uid = url.rsplit("/", 1)[-1]
+        appels.append(uid)
+        return Reponse(uid)
+
+    monkeypatch.setattr(main.httpx, "get", faux_get)
+    assert main._emails_equipe(db) == ["contact@gendon.fr", "modo1@perso.fr"]
+    assert appels == ["modo1"]

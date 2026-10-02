@@ -1745,8 +1745,14 @@ def _emails_equipe(db: Session) -> list:
     Mis en cache 10 minutes : sans cela, chaque envoi interrogeait Clerk une fois par membre."""
     if time.monotonic() < _cache_emails_equipe["expire"] and _cache_emails_equipe["emails"]:
         return list(_cache_emails_equipe["emails"])
-    identifiants = set(_admins_principaux())
-    identifiants.update(r.clerk_user_id for r in db.query(models.Role).all())
+    # CONTACT_EMAIL (ex. contact@gendon.fr) remplace l'adresse personnelle des admins principaux :
+    # leurs réponses partent alors de l'adresse du site, pas de leur boîte perso
+    adresse_site = os.getenv("CONTACT_EMAIL", "").strip()
+    identifiants = {r.clerk_user_id for r in db.query(models.Role).all()}
+    if adresse_site:
+        identifiants -= set(_admins_principaux())
+    else:
+        identifiants |= set(_admins_principaux())
     headers = {"Authorization": f"Bearer {os.getenv('CLERK_SECRET_KEY')}"}
     emails = []
     for uid in identifiants:
@@ -1758,6 +1764,8 @@ def _emails_equipe(db: Session) -> list:
                     emails.append(adresse)
         except Exception:
             continue
+    if adresse_site:
+        emails.insert(0, adresse_site)
     if emails:
         _cache_emails_equipe["emails"] = emails
         _cache_emails_equipe["expire"] = time.monotonic() + DUREE_CACHE_EQUIPE

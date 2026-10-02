@@ -6,7 +6,7 @@ import { Copy, Check } from "lucide-react"
 // Adresse de contact encodée (base64 de l'adresse écrite à l'envers) : elle n'apparaît en clair
 // ni dans le HTML ni dans le code JavaScript servi, et n'est reconstituée qu'au clic d'un visiteur.
 // Les robots qui aspirent les adresses e-mail ne la trouvent donc pas.
-const ADRESSE_ENCODEE = "bW9jLmxpYW1nQGlkaGVtZHJhaGNpcA=="
+const ADRESSE_ENCODEE = "cmYubm9kbmVnQHRjYXRub2M="
 
 function decoder(): string {
   return atob(ADRESSE_ENCODEE).split("").reverse().join("")

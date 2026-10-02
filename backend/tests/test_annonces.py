@@ -20,13 +20,17 @@ def test_pseudo_et_statut_fixes_par_le_serveur(client):
     assert reponse.json()["statut"] == "publiee"
 
 
-def test_listing_filtre_et_masque_mes_annonces(client, utilisateur):
+def test_listing_filtre_et_marque_mes_annonces(client, utilisateur):
     publier(client, categorie="Mobilier")
     publier(client, categorie="Sport")
-    # Le propriétaire ne voit pas ses propres annonces dans le listing
-    assert client.get("/annonces").json()["total"] == 0
+    # Le propriétaire voit ses propres annonces, marquées comme telles
+    listing = client.get("/annonces").json()
+    assert listing["total"] == 2
+    assert all(a["est_proprietaire"] for a in listing["annonces"])
     utilisateur.uid = "u2"
-    assert client.get("/annonces").json()["total"] == 2
+    listing = client.get("/annonces").json()
+    assert listing["total"] == 2
+    assert not any(a["est_proprietaire"] for a in listing["annonces"])
     assert client.get("/annonces?categorie=Mobilier").json()["total"] == 1
 
 

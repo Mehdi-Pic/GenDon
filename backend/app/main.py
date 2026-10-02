@@ -758,12 +758,6 @@ def lister_annonces(
         )
     if quartier:
         query = query.filter(models.Annonce.quartier == quartier)
-    if user_id:
-        # L'utilisateur connecté ne voit pas ses propres annonces dans le listing
-        query = query.filter(
-            (models.Annonce.clerk_user_id != user_id) |
-            (models.Annonce.clerk_user_id == None)
-        )
     if photos:
         query = query.filter(func.cardinality(models.Annonce.images) > 0)
     if periode == "semaine":
@@ -787,6 +781,7 @@ def lister_annonces(
         }
         for a in annonces:
             a.est_favori = a.id in favoris_ids
+            a.est_proprietaire = a.clerk_user_id == user_id
     return {"annonces": annonces, "total": total, "pages": ceil(total / LIMITE_PAR_PAGE) if total > 0 else 1, "page": page}
 
 

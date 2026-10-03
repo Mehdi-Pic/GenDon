@@ -41,13 +41,21 @@ export default function Confidentialite() {
             </li>
             <li>
               <strong>Messagerie</strong> : les messages échangés entre un donneur et un intéressé sont
-              conservés par GenDon pour permettre la conversation. Ils sont supprimés lorsque les deux
-              participants ont quitté la conversation, lorsque l&apos;annonce est supprimée, ou lors de la
-              suppression du compte. Vos adresses email ne sont jamais communiquées à l&apos;autre personne.
+              conservés par GenDon pour permettre la conversation, y compris après le retrait de
+              l&apos;annonce, le temps de finaliser la remise de l&apos;objet. Vos adresses email ne sont
+              jamais communiquées à l&apos;autre personne. Un email vous prévient d&apos;un nouveau message ;
+              vous pouvez le désactiver depuis Mon profil.
+            </li>
+            <li>
+              <strong>Alertes de recherche</strong> : les critères que vous enregistrez (mot-clé, catégorie,
+              quartier) servent à vous envoyer par email les nouveaux dons correspondants. Vous les
+              supprimez à tout moment depuis Mon profil.
             </li>
             <li>
               <strong>Favoris et signalements</strong> : les annonces que vous mettez en favori, et les
               signalements que vous envoyez (motif et identifiant de votre compte) pour permettre leur traitement.
+              Lorsqu&apos;un participant signale une conversation, l&apos;équipe de modération peut lire
+              cette conversation, et elle seule, pour traiter le signalement.
             </li>
             <li>
               <strong>Formulaire de contact</strong> : nom, adresse email, sujet et message. Ils ne sont pas
@@ -96,13 +104,15 @@ export default function Confidentialite() {
           <ul className="list-disc pl-5 text-gray-600 leading-relaxed flex flex-col gap-2">
             <li><strong>Clerk Inc.</strong> (États-Unis) : authentification et gestion des comptes.</li>
             <li><strong>Cloudinary Ltd.</strong> (Israël, serveurs aux États-Unis) : hébergement des photos d&apos;annonces.</li>
-            <li><strong>Resend Inc.</strong> (États-Unis) : envoi des emails (notifications de messages, rappels d&apos;expiration, lettre d&apos;information).</li>
+            <li><strong>Resend Inc.</strong> (États-Unis) : envoi des emails (notifications de messages, alertes de recherche, rappels d&apos;expiration, lettre d&apos;information).</li>
             <li><strong>Vercel Inc.</strong> et <strong>Railway Corp.</strong> (États-Unis) : hébergement du site et de la base de données, mesure d&apos;audience (Vercel).</li>
           </ul>
           <p className="text-gray-600 leading-relaxed mt-3">
             Au sein de l&apos;équipe, les modérateurs bénévoles voient les annonces, les signalements et les
             pseudos des comptes, mais pas leurs adresses email, réservées aux administrateurs. Ni les uns ni
-            les autres n&apos;ont accès au contenu des conversations privées depuis le site.
+            les autres n&apos;ont accès aux conversations privées, sauf à une conversation signalée par
+            l&apos;un de ses participants : chaque lecture est alors inscrite au journal de modération.
+            En cas d&apos;abus, l&apos;équipe peut suspendre un compte.
           </p>
           <p className="text-gray-600 leading-relaxed mt-3">
             Ces prestataires peuvent être situés hors de l&apos;Union européenne ; ils s&apos;appuient sur
@@ -115,10 +125,11 @@ export default function Confidentialite() {
           <ul className="list-disc pl-5 text-gray-600 leading-relaxed flex flex-col gap-2">
             <li>Les <strong>annonces</strong> (textes et photos) sont automatiquement supprimées <strong>30 jours</strong> après leur publication (ou leur dernier renouvellement), <strong>3 jours</strong> après avoir été déclarées données, ou dès leur suppression par l&apos;utilisateur.</li>
             <li>Les <strong>photos envoyées mais jamais publiées</strong> sont supprimées sous 48 heures.</li>
+            <li>Les <strong>conversations</strong> sont supprimées lorsque les deux participants les ont quittées, ou <strong>30 jours</strong> après le dernier message une fois l&apos;annonce retirée. Une conversation signalée est conservée jusqu&apos;au traitement du signalement.</li>
             <li>À la suppression du compte, les dons réalisés restent comptabilisés de façon anonyme (sans lien avec votre compte ni titre d&apos;annonce).</li>
             <li>Le <strong>journal de modération</strong> (actions de l&apos;équipe, pouvant citer un pseudo ou un titre d&apos;annonce) est conservé <strong>1 an</strong>.</li>
             <li>Les <strong>messages du formulaire de contact</strong> sont conservés dans la boîte email de l&apos;équipe le temps de traiter la demande.</li>
-            <li>Le <strong>compte utilisateur</strong> est conservé tant qu&apos;il est actif. Vous pouvez le supprimer vous-même à tout moment (menu du compte en haut à droite, « Gérer le compte ») : vos annonces, photos, messages, favoris et signalements sont alors effacés.</li>
+            <li>Le <strong>compte utilisateur</strong> est conservé tant qu&apos;il est actif. Vous pouvez le supprimer vous-même à tout moment (menu du compte en haut à droite, « Gérer le compte ») : vos annonces, photos, messages, favoris, alertes et signalements sont alors effacés.</li>
           </ul>
         </section>
 

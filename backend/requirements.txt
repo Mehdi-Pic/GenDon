@@ -14,3 +14,4 @@ apscheduler==3.11.0
 svix==1.42.0
 tzdata==2025.2
 pillow==12.3.0
+alembic==1.20.0

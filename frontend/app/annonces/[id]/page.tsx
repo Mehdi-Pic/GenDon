@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { MapPin, User, ArrowLeft, Pencil, Eye, CheckCircle } from "lucide-react"
+import { MapPin, User, ArrowLeft, Pencil, Eye, CheckCircle, Clock } from "lucide-react"
 import { auth } from "@clerk/nextjs/server"
 import ImageCarousel from "../../components/ImageCarousel"
 import ContactButton from "./ContactButton"
@@ -117,7 +117,9 @@ export default async function AnnonceDetail({ params }: { params: Promise<{ id: 
           </div>
         ) : annonce.est_proprietaire ? (
           <div className="flex items-center justify-between bg-gray-50 rounded-2xl px-5 py-4">
-            <p className="text-sm font-medium text-gray-600">C&apos;est votre annonce.</p>
+            <p className="text-sm font-medium text-gray-600">
+              C&apos;est votre annonce{annonce.statut === "reservee" ? " (réservée)" : ""}.
+            </p>
             <Link href={`/mes-annonces/${annonce.id}/modifier`} className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-700 text-white px-4 py-2 rounded-full text-sm font-semibold transition-colors">
               <Pencil className="w-4 h-4" aria-hidden="true" />
               Modifier
@@ -125,6 +127,15 @@ export default async function AnnonceDetail({ params }: { params: Promise<{ id: 
           </div>
         ) : (
           <>
+            {annonce.statut === "reservee" && (
+              <div className="flex items-start gap-3 bg-amber-50 text-amber-800 rounded-2xl px-5 py-4 mb-4">
+                <Clock className="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
+                <p className="text-sm">
+                  <span className="font-semibold">Objet réservé.</span> Le donneur l&apos;a promis à quelqu&apos;un.
+                  Vous pouvez quand même vous manifester : vous serez prévenu si la réservation tombe.
+                </p>
+              </div>
+            )}
             <ContactButton annonceId={annonce.id} titreDon={annonce.titre} />
             <div className="mt-6 text-center">
               <SignalerButton annonceId={annonce.id} />

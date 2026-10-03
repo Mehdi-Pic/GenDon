@@ -3,13 +3,19 @@
 import { useUser, useAuth } from "@clerk/nextjs"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { MapPin, Pencil, Trash2, Eye, Heart, RefreshCw, HandHeart, Mail, ShieldCheck, ChevronRight } from "lucide-react"
+import { MapPin, Pencil, Trash2, Eye, Heart, RefreshCw, HandHeart, Mail, ShieldCheck, ChevronRight, Users, Clock, Undo2, Bell, MessageCircle } from "lucide-react"
 import Link from "next/link"
 import AnnonceCard from "../components/AnnonceCard"
 import ServiceIndisponible from "../components/ServiceIndisponible"
 import { vignette, type Annonce } from "../lib/annonces"
 
-type Onglet = "annonces" | "favoris"
+type Onglet = "annonces" | "favoris" | "alertes"
+
+type Alerte = { id: number; recherche: string | null; categorie: string | null; quartier: string | null }
+
+function libelleAlerte(a: Alerte): string {
+  return [a.recherche ? `« ${a.recherche} »` : null, a.categorie, a.quartier].filter(Boolean).join(" · ")
+}
 
 export default function Profil() {
   const { isLoaded } = useUser()
@@ -23,6 +29,10 @@ export default function Profil() {
   // null tant que la préférence n'est pas connue : l'interrupteur reste masqué
   const [newsletter, setNewsletter] = useState<boolean | null>(null)
   const [erreurNewsletter, setErreurNewsletter] = useState("")
+  const [emailsMessages, setEmailsMessages] = useState<boolean | null>(null)
+  const [erreurEmailsMessages, setErreurEmailsMessages] = useState("")
+  const [alertes, setAlertes] = useState<Alerte[]>([])
+  const [liberation, setLiberation] = useState<number | null>(null)
   // Rôle staff renvoyé par le serveur ; null pour un utilisateur ordinaire (403 attendu)
   const [roleStaff, setRoleStaff] = useState<string | null>(null)
   const [renouvellement, setRenouvellement] = useState<number | null>(null)
@@ -77,6 +87,28 @@ export default function Profil() {
     return () => { actif = false }
   }, [isLoaded, isSignedIn, getToken])
 
+  // Emails « nouveau message » et alertes : chargés à part, leur échec ne bloque pas le profil
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+    let actif = true
+    ;(async () => {
+      try {
+        const token = await getToken()
+        const headers = { Authorization: `Bearer ${token}` }
+        const [resPref, resAlertes] = await Promise.all([
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications/messages/moi`, { headers }),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/alertes`, { headers }),
+        ])
+        if (actif && resPref.ok) setEmailsMessages((await resPref.json()).actif)
+        if (actif && resAlertes.ok) {
+          const data = await resAlertes.json()
+          setAlertes(Array.isArray(data) ? data : [])
+        }
+      } catch {}
+    })()
+    return () => { actif = false }
+  }, [isLoaded, isSignedIn, getToken])
+
   // Accès au panel d'administration : affiché seulement si le serveur reconnaît le rôle.
   // Purement cosmétique, chaque endpoint /admin re-vérifie le rôle en base.
   useEffect(() => {
@@ -108,6 +140,52 @@ export default function Profil() {
     } catch {
       setNewsletter(!abonne)
       setErreurNewsletter("Le changement n'a pas pu être enregistré. Réessayez.")
+    }
+  }
+
+  async function changerEmailsMessages(actif: boolean) {
+    setErreurEmailsMessages("")
+    setEmailsMessages(actif)
+    try {
+      const token = await getToken()
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications/messages/moi`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ actif }),
+      })
+      if (!res.ok) throw new Error()
+    } catch {
+      setEmailsMessages(!actif)
+      setErreurEmailsMessages("Le changement n'a pas pu être enregistré. Réessayez.")
+    }
+  }
+
+  async function supprimerAlerte(id: number) {
+    const token = await getToken()
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/alertes/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) setAlertes((prev) => prev.filter((a) => a.id !== id))
+    else alert("La suppression a échoué. Réessayez.")
+  }
+
+  async function annulerReservation(id: number) {
+    if (!confirm("Annuler la réservation ? L'objet redevient disponible et les personnes intéressées sont prévenues.")) return
+    setLiberation(id)
+    try {
+      const token = await getToken()
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/annonces/${id}/liberer`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        alert("L'opération a échoué. Réessayez.")
+        return
+      }
+      setAnnonces((prev) => prev.map((a) => (a.id === id ? { ...a, statut: "publiee", reserve_pour_pseudo: null } : a)))
+    } finally {
+      setLiberation(null)
     }
   }
 
@@ -169,7 +247,7 @@ export default function Profil() {
         return
       }
       const maj: Annonce = await res.json()
-      setAnnonces((prev) => prev.map((a) => (a.id === id ? { ...a, donne_at: maj.donne_at } : a)))
+      setAnnonces((prev) => prev.map((a) => (a.id === id ? { ...a, donne_at: maj.donne_at, statut: maj.statut } : a)))
     } finally {
       setDon(null)
     }
@@ -230,7 +308,7 @@ export default function Profil() {
           </Link>
         )}
 
-        <div className="flex items-center gap-2 mb-8">
+        <div className="flex flex-wrap items-center gap-2 mb-8">
           <button
             onClick={() => setOnglet("annonces")}
             className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors ${
@@ -246,6 +324,14 @@ export default function Profil() {
             }`}
           >
             Mes favoris ({favoris.length})
+          </button>
+          <button
+            onClick={() => setOnglet("alertes")}
+            className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors ${
+              onglet === "alertes" ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            Mes alertes ({alertes.length})
           </button>
         </div>
 
@@ -289,6 +375,21 @@ export default function Profil() {
                           <HandHeart className="w-3 h-3" />
                           Objet donné
                         </span>
+                      )}
+                      {!annonce.donne_at && annonce.statut === "reservee" && (
+                        <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 font-medium px-2 py-0.5 rounded-full">
+                          <Clock className="w-3 h-3" />
+                          Réservé{annonce.reserve_pour_pseudo ? ` pour ${annonce.reserve_pour_pseudo}` : ""}
+                        </span>
+                      )}
+                      {!annonce.donne_at && (annonce.nb_interesses ?? 0) > 0 && (
+                        <Link
+                          href={`/messages?annonce=${annonce.id}`}
+                          className="inline-flex items-center gap-1 text-xs bg-gray-900 hover:bg-gray-700 text-white font-medium px-2 py-0.5 rounded-full transition-colors"
+                        >
+                          <Users className="w-3 h-3" />
+                          {annonce.nb_interesses} personne{(annonce.nb_interesses ?? 0) > 1 ? "s" : ""} intéressée{(annonce.nb_interesses ?? 0) > 1 ? "s" : ""}
+                        </Link>
                       )}
                     </div>
                   </div>
@@ -335,6 +436,16 @@ export default function Profil() {
                             <RefreshCw className={`w-4 h-4 ${renouvellement === annonce.id ? "animate-spin" : ""}`} />
                             Renouveler
                           </button>
+                          {annonce.statut === "reservee" && (
+                            <button
+                              onClick={() => annulerReservation(annonce.id)}
+                              disabled={liberation === annonce.id}
+                              className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 border border-amber-200 hover:border-amber-400 text-amber-700 disabled:opacity-60 px-3 py-2 rounded-full text-sm font-medium transition-colors"
+                            >
+                              <Undo2 className="w-4 h-4" />
+                              Annuler la réservation
+                            </button>
+                          )}
                           <Link href={`/mes-annonces/${annonce.id}/modifier`} className="flex items-center justify-center gap-1.5 border border-gray-200 hover:border-gray-400 text-gray-600 px-3 py-2 rounded-full text-sm font-medium transition-colors">
                             <Pencil className="w-4 h-4" />
                             Modifier
@@ -393,9 +504,74 @@ export default function Profil() {
           )
         )}
 
-        {newsletter !== null && (
-          <section className="mt-12 pt-8 border-t border-gray-100">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Préférences</h2>
+        {onglet === "alertes" && (
+          alertes.length === 0 ? (
+            <div className="text-center py-24">
+              <Bell className="w-10 h-10 text-gray-200 mx-auto mb-4" />
+              <p className="text-gray-400 mb-4 max-w-md mx-auto">
+                Aucune alerte. Lancez une recherche sur la page des dons puis touchez «&nbsp;Créer une alerte&nbsp;» :
+                vous recevrez un email dès qu&apos;un don correspondant est publié.
+              </p>
+              <Link href="/annonces" className="bg-gray-900 hover:bg-gray-700 text-white px-6 py-3 rounded-full font-semibold transition-colors">
+                Voir les annonces
+              </Link>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {alertes.map((a) => (
+                <div key={a.id} className="flex items-center gap-3 bg-white ring-1 ring-gray-100 rounded-2xl px-4 py-3">
+                  <Bell className="w-4 h-4 text-green-600 shrink-0" aria-hidden="true" />
+                  <Link
+                    href={`/annonces?${new URLSearchParams(
+                      Object.entries({ recherche: a.recherche, categorie: a.categorie, quartier: a.quartier })
+                        .filter((e): e is [string, string] => Boolean(e[1]))
+                    ).toString()}`}
+                    className="flex-1 min-w-0 text-sm text-gray-900 truncate hover:underline"
+                  >
+                    {libelleAlerte(a)}
+                  </Link>
+                  <button
+                    onClick={() => supprimerAlerte(a.id)}
+                    aria-label={`Supprimer l'alerte ${libelleAlerte(a)}`}
+                    className="p-2 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {(newsletter !== null || emailsMessages !== null) && (
+          <section className="mt-12 pt-8 border-t border-gray-100 flex flex-col gap-3">
+            <h2 className="text-lg font-bold text-gray-900 mb-1">Préférences</h2>
+            {emailsMessages !== null && (
+              <>
+                <label className="flex items-start justify-between gap-4 bg-gray-50 rounded-2xl px-5 py-4 cursor-pointer">
+                  <span className="flex items-start gap-3">
+                    <MessageCircle className="w-5 h-5 text-green-600 mt-0.5 shrink-0" aria-hidden="true" />
+                    <span>
+                      <span className="block text-sm font-semibold text-gray-900">Emails de nouveaux messages</span>
+                      <span className="block text-sm text-gray-500">Être prévenu par email quand quelqu&apos;un vous écrit sur GenDon.</span>
+                    </span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    checked={emailsMessages}
+                    onChange={(e) => changerEmailsMessages(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="relative shrink-0 w-11 h-6 rounded-full bg-gray-300 peer-checked:bg-green-600 peer-focus-visible:ring-2 peer-focus-visible:ring-green-300 transition-colors after:absolute after:top-0.5 after:left-0.5 after:w-5 after:h-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-5"
+                  />
+                </label>
+                {erreurEmailsMessages && <p className="text-sm text-red-600">{erreurEmailsMessages}</p>}
+              </>
+            )}
+            {newsletter !== null && (
             <label className="flex items-start justify-between gap-4 bg-gray-50 rounded-2xl px-5 py-4 cursor-pointer">
               <span className="flex items-start gap-3">
                 <Mail className="w-5 h-5 text-green-600 mt-0.5 shrink-0" aria-hidden="true" />
@@ -416,7 +592,8 @@ export default function Profil() {
                 className="relative shrink-0 w-11 h-6 rounded-full bg-gray-300 peer-checked:bg-green-600 peer-focus-visible:ring-2 peer-focus-visible:ring-green-300 transition-colors after:absolute after:top-0.5 after:left-0.5 after:w-5 after:h-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-5"
               />
             </label>
-            {erreurNewsletter && <p className="text-sm text-red-600 mt-2">{erreurNewsletter}</p>}
+            )}
+            {erreurNewsletter && <p className="text-sm text-red-600">{erreurNewsletter}</p>}
           </section>
         )}
       </div>

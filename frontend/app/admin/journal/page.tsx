@@ -15,6 +15,9 @@ const LIBELLES: Record<string, string> = {
   suppression_annonce: "Suppression d'annonce",
   changement_role: "Changement de rôle",
   signalement_traite: "Signalement traité",
+  conversation_consultee: "Lecture d'une conversation signalée",
+  suspension: "Suspension de compte",
+  reactivation: "Réactivation de compte",
 }
 
 export default function AdminJournal() {

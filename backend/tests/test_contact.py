@@ -1,7 +1,11 @@
 """Formulaire de contact : anti-robot, limites par expéditeur et globales, champs nettoyés."""
 import pytest
 
-from app import main, models
+import httpx
+import resend
+
+from app import models, roles
+from app.routers import contact
 
 
 def message(**champs):
@@ -19,8 +23,8 @@ def message(**champs):
 def envois(client, monkeypatch):
     """Capture les emails envoyés à l'équipe ; l'équipe est fixée sans appeler Clerk."""
     envoyes = []
-    monkeypatch.setattr(main.resend.Emails, "send", lambda payload: envoyes.append(payload))
-    monkeypatch.setattr(main, "_emails_equipe", lambda db: ["equipe@exemple.fr"])
+    monkeypatch.setattr(resend.Emails, "send", lambda payload: envoyes.append(payload))
+    monkeypatch.setattr(contact, "_emails_equipe", lambda db: ["equipe@exemple.fr"])
     return envoyes
 
 
@@ -56,20 +60,20 @@ def test_plafond_global_malgre_changement_d_ip(client, envois, anonyme):
     """Un robot qui change d'IP à chaque envoi est arrêté par le plafond global."""
     codes = [
         client.post("/contact", json=message(), headers=visiteur(f"203.0.113.{i}")).status_code
-        for i in range(main.CONTACT_MAX_PAR_HEURE + 5)
+        for i in range(contact.CONTACT_MAX_PAR_HEURE + 5)
     ]
-    assert codes.count(200) == main.CONTACT_MAX_PAR_HEURE
+    assert codes.count(200) == contact.CONTACT_MAX_PAR_HEURE
     assert codes[-1] == 429
-    assert len(envois) == main.CONTACT_MAX_PAR_HEURE
+    assert len(envois) == contact.CONTACT_MAX_PAR_HEURE
 
 
 def test_plafond_quotidien(client, envois, anonyme, monkeypatch):
-    monkeypatch.setattr(main, "CONTACT_MAX_PAR_HEURE", 1000)
+    monkeypatch.setattr(contact, "CONTACT_MAX_PAR_HEURE", 1000)
     codes = [
         client.post("/contact", json=message(), headers=visiteur(f"198.18.{i // 250}.{i % 250}")).status_code
-        for i in range(main.CONTACT_MAX_PAR_JOUR + 3)
+        for i in range(contact.CONTACT_MAX_PAR_JOUR + 3)
     ]
-    assert codes.count(200) == main.CONTACT_MAX_PAR_JOUR
+    assert codes.count(200) == contact.CONTACT_MAX_PAR_JOUR
 
 
 @pytest.mark.parametrize("adresse", ["pas-une-adresse", "a@b", "a b@exemple.fr", "a@exemple.fr\nBcc: x@y.fr"])
@@ -103,7 +107,7 @@ def test_contenu_html_echappe(client, envois, anonyme):
 
 def test_adresses_equipe_en_cache(client, monkeypatch, anonyme):
     """Les adresses de l'équipe sont lues chez Clerk une fois, puis gardées 10 minutes."""
-    monkeypatch.setattr(main, "_admins_principaux", lambda: ["admin1"])
+    monkeypatch.setattr(roles, "admins_principaux", lambda: ["admin1"])
     appels = []
 
     class Reponse:
@@ -116,8 +120,8 @@ def test_adresses_equipe_en_cache(client, monkeypatch, anonyme):
         appels.append(url)
         return Reponse()
 
-    monkeypatch.setattr(main.httpx, "get", faux_get)
-    monkeypatch.setattr(main.resend.Emails, "send", lambda payload: None)
+    monkeypatch.setattr(httpx, "get", faux_get)
+    monkeypatch.setattr(resend.Emails, "send", lambda payload: None)
     for i in range(3):
         assert client.post("/contact", json=message(), headers=visiteur(f"203.0.113.{i}")).status_code == 200
     assert len(appels) == 1
@@ -150,6 +154,6 @@ def test_adresse_du_site_remplace_celle_des_admins(db, monkeypatch):
         appels.append(uid)
         return Reponse(uid)
 
-    monkeypatch.setattr(main.httpx, "get", faux_get)
-    assert main._emails_equipe(db) == ["contact@gendon.fr", "modo1@perso.fr"]
+    monkeypatch.setattr(httpx, "get", faux_get)
+    assert contact._emails_equipe(db) == ["contact@gendon.fr", "modo1@perso.fr"]
     assert appels == ["modo1"]

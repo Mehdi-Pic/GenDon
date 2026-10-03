@@ -3,12 +3,15 @@
 import { useEffect, useState } from "react"
 import { useAuth } from "@clerk/nextjs"
 import Link from "next/link"
-import { Check, ExternalLink, Trash2 } from "lucide-react"
+import { Check, ExternalLink, Trash2, MessageCircle } from "lucide-react"
 
 type Signalement = {
   id: number
-  annonce_id: number
+  type: "annonce" | "conversation"
+  annonce_id: number | null
   annonce_titre: string | null
+  conversation_id: number | null
+  conversation_titre: string | null
   raison: string
   traite: boolean
   created_at: string
@@ -81,7 +84,16 @@ export default function AdminSignalements() {
                 ) : (
                   <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold">À traiter</span>
                 )}
-                {s.annonce_titre ? (
+                {s.type === "conversation" ? (
+                  s.conversation_id ? (
+                    <Link href={`/admin/conversations/${s.conversation_id}`} className="font-bold text-sm text-gray-900 hover:underline inline-flex items-center gap-1">
+                      <MessageCircle className="w-3.5 h-3.5 text-gray-400" />
+                      Conversation · {s.conversation_titre || "annonce retirée"}
+                    </Link>
+                  ) : (
+                    <span className="text-sm text-gray-400 italic">Conversation supprimée</span>
+                  )
+                ) : s.annonce_titre ? (
                   <Link href={`/annonces/${s.annonce_id}`} target="_blank" className="font-bold text-sm text-gray-900 hover:underline inline-flex items-center gap-1">
                     {s.annonce_titre}
                     <ExternalLink className="w-3 h-3 text-gray-400" />
@@ -101,7 +113,7 @@ export default function AdminSignalements() {
                     <Check className="w-3.5 h-3.5" />
                     Marquer traité
                   </button>
-                  {s.annonce_titre && (
+                  {s.type === "annonce" && s.annonce_titre && (
                     <button
                       onClick={() => supprimerAnnonce(s)}
                       className="flex items-center gap-1.5 border border-red-100 hover:border-red-300 text-red-500 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"

@@ -12,6 +12,7 @@ from .. import clerk, emails, models
 from ..auth import get_current_user_id
 from ..database import SessionLocal, get_db
 from ..photos import supprimer_images_cloudinary
+from .messagerie import liberer_reservation
 
 router = APIRouter()
 
@@ -30,6 +31,11 @@ def purger_donnees_utilisateur(db: Session, clerk_user_id: str):
     for conv in conversations:
         db.delete(conv)  # messages liés partent en cascade
     db.flush()
+    # Objets qui lui étaient réservés : de nouveau disponibles pour les autres demandeurs
+    for annonce in db.query(models.Annonce).filter(
+        models.Annonce.reserve_pour == clerk_user_id, models.Annonce.clerk_user_id != clerk_user_id
+    ).all():
+        liberer_reservation(db, annonce, "")
     annonces = db.query(models.Annonce).filter(models.Annonce.clerk_user_id == clerk_user_id).all()
     images = []
     for annonce in annonces:
@@ -48,9 +54,8 @@ def purger_donnees_utilisateur(db: Session, clerk_user_id: str):
     db.query(models.Favori).filter(models.Favori.clerk_user_id == clerk_user_id).delete()
     db.query(models.Signalement).filter(models.Signalement.clerk_user_id == clerk_user_id).delete()
     db.query(models.Role).filter(models.Role.clerk_user_id == clerk_user_id).delete()
-    db.query(models.DesabonnementNewsletter).filter(
-        models.DesabonnementNewsletter.clerk_user_id == clerk_user_id
-    ).delete()
+    for table in (models.DesabonnementNewsletter, models.DesabonnementMessages, models.Alerte):
+        db.query(table).filter(table.clerk_user_id == clerk_user_id).delete()
     db.commit()
     supprimer_images_cloudinary(list(set(images)))
 
@@ -147,6 +152,44 @@ def changer_preference_newsletter(
         except IntegrityError:
             db.rollback()  # double clic : déjà désabonné
     return {"abonne": data.abonne}
+
+
+# ---------- Emails « nouveau message » (depuis Mon profil) ----------
+
+class PreferenceEmailsMessages(PydanticBase):
+    actif: bool
+
+
+@router.get("/notifications/messages/moi")
+def lire_preference_emails_messages(
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    refus = (
+        db.query(models.DesabonnementMessages)
+        .filter(models.DesabonnementMessages.clerk_user_id == user_id)
+        .first()
+    )
+    return {"actif": refus is None}
+
+
+@router.put("/notifications/messages/moi")
+def changer_preference_emails_messages(
+    data: PreferenceEmailsMessages,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    requete = db.query(models.DesabonnementMessages).filter(models.DesabonnementMessages.clerk_user_id == user_id)
+    if data.actif:
+        requete.delete()
+        db.commit()
+    elif not requete.first():
+        db.add(models.DesabonnementMessages(clerk_user_id=user_id))
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()  # double clic : déjà enregistré
+    return {"actif": data.actif}
 
 
 # ---------- Désabonnement newsletter (public, via lien signé dans l'email) ----------

@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session
 from .. import clerk, models, schemas
 from ..auth import get_current_user_id, get_user_id_optionnel
 from ..database import get_db
-from ..outils import echapper_like, ip_client, limite_atteinte, verifier_rate_limit
+from ..outils import filtre_recherche, ip_client, limite_atteinte, verifier_rate_limit
 from ..photos import supprimer_images_cloudinary, valider_images
+from .messagerie import informer_les_demandeurs, liberer_reservation, message_systeme
 
 router = APIRouter()
 
@@ -69,10 +70,7 @@ def lister_annonces(
     if categorie:
         query = query.filter(models.Annonce.categorie == categorie)
     if recherche:
-        terme = f"%{echapper_like(recherche.strip()[:100])}%"
-        query = query.filter(
-            models.Annonce.titre.ilike(terme, escape="\\") | models.Annonce.description.ilike(terme, escape="\\")
-        )
+        query = query.filter(filtre_recherche(recherche, models.Annonce.titre, models.Annonce.description))
     if quartier:
         query = query.filter(models.Annonce.quartier == quartier)
     if photos:
@@ -107,12 +105,30 @@ def get_mes_annonces(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    return (
+    annonces = (
         db.query(models.Annonce)
         .filter(models.Annonce.clerk_user_id == user_id)
         .order_by(models.Annonce.created_at.desc())
         .all()
     )
+    if not annonces:
+        return []
+    ids = [a.id for a in annonces]
+    # Personnes intéressées : conversations encore ouvertes côté demandeur
+    convs = (
+        db.query(models.Conversation.annonce_id, models.Conversation.demandeur_id, models.Conversation.demandeur_pseudo)
+        .filter(models.Conversation.annonce_id.in_(ids), models.Conversation.demandeur_actif == True)
+        .all()
+    )
+    for a in annonces:
+        a.est_proprietaire = True
+        a.nb_interesses = sum(1 for c in convs if c.annonce_id == a.id)
+        if a.reserve_pour:
+            a.reserve_pour_pseudo = next(
+                (c.demandeur_pseudo for c in convs if c.annonce_id == a.id and c.demandeur_id == a.reserve_pour),
+                None,
+            )
+    return annonces
 
 
 @router.get("/annonces/{annonce_id}", response_model=schemas.AnnonceResponse)
@@ -152,6 +168,9 @@ def modifier_annonce(
     images_supprimees = set(annonce.images or []) - set(data.images or [])
     for key, value in data.model_dump().items():
         setattr(annonce, key, value)
+    db.query(models.Conversation).filter(models.Conversation.annonce_id == annonce_id).update(
+        {models.Conversation.annonce_titre: annonce.titre[:100]}
+    )
     db.commit()
     db.refresh(annonce)
     # Après le commit : si l'enregistrement échoue, les photos ne sont pas perdues
@@ -214,8 +233,82 @@ def declarer_don(
         raise HTTPException(status_code=400, detail="Ce don est deja enregistre")
     # Trace independante de l'annonce : le compteur survit a la purge des 3 jours
     db.add(models.DonRealise(clerk_user_id=user_id, titre=annonce.titre[:100]))
+    db.query(models.Annonce).filter(models.Annonce.id == annonce_id).update(
+        {models.Annonce.statut: "publiee", models.Annonce.reserve_pour: None}, synchronize_session=False
+    )
+    informer_les_demandeurs(db, annonce_id, f"{annonce.pseudo} a indiqué que l'objet a été donné.")
     db.commit()
     db.refresh(annonce)
+    return annonce
+
+
+class Reservation(PydanticBase):
+    conversation_id: int
+
+
+def _annonce_du_proprietaire(db: Session, annonce_id: int, user_id: str) -> models.Annonce:
+    annonce = db.query(models.Annonce).filter(models.Annonce.id == annonce_id).first()
+    if not annonce:
+        raise HTTPException(status_code=404, detail="Annonce introuvable")
+    verifier_proprietaire(annonce, user_id)
+    if annonce.donne_at:
+        raise HTTPException(status_code=400, detail="Cette annonce est cloturee")
+    return annonce
+
+
+@router.post("/annonces/{annonce_id}/reserver", response_model=schemas.AnnonceResponse)
+def reserver_annonce(
+    annonce_id: int,
+    data: Reservation,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Le donneur promet l'objet à l'un des demandeurs : les autres sont prévenus et
+    l'annonce affiche « Réservé » (elle reste visible si la réservation tombe)."""
+    annonce = _annonce_du_proprietaire(db, annonce_id, user_id)
+    conv = (
+        db.query(models.Conversation)
+        .filter(models.Conversation.id == data.conversation_id, models.Conversation.annonce_id == annonce_id)
+        .first()
+    )
+    if not conv or not conv.demandeur_actif or not conv.donneur_actif:
+        raise HTTPException(status_code=400, detail="Conversation invalide pour cette annonce")
+    if annonce.statut == "reservee" and annonce.reserve_pour == conv.demandeur_id:
+        return annonce
+    if annonce.statut == "reservee":
+        # Changement de bénéficiaire : l'ancien est prévenu
+        ancienne = (
+            db.query(models.Conversation)
+            .filter(models.Conversation.annonce_id == annonce_id, models.Conversation.demandeur_id == annonce.reserve_pour)
+            .first()
+        )
+        if ancienne:
+            message_systeme(db, ancienne, "La réservation est annulée : l'objet a été promis à une autre personne.")
+    annonce.statut = "reservee"
+    annonce.reserve_pour = conv.demandeur_id
+    message_systeme(db, conv, f"{annonce.pseudo} vous a réservé l'objet. Convenez ensemble de la remise.")
+    informer_les_demandeurs(
+        db, annonce_id, "L'objet est réservé pour une autre personne. Vous serez prévenu s'il redevient disponible.",
+        sauf_conversation=conv.id,
+    )
+    db.commit()
+    db.refresh(annonce)
+    annonce.est_proprietaire = True
+    return annonce
+
+
+@router.post("/annonces/{annonce_id}/liberer", response_model=schemas.AnnonceResponse)
+def liberer_annonce(
+    annonce_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    annonce = _annonce_du_proprietaire(db, annonce_id, user_id)
+    if annonce.statut == "reservee":
+        liberer_reservation(db, annonce, f"{annonce.pseudo} a annulé la réservation.")
+        db.commit()
+        db.refresh(annonce)
+    annonce.est_proprietaire = True
     return annonce
 
 

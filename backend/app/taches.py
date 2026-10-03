@@ -11,7 +11,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from . import clerk, emails, models
 from .database import SessionLocal
-from .outils import nettoyer_rate_limit
+from .outils import filtre_recherche, nettoyer_rate_limit
 from .photos import supprimer_images_cloudinary
 
 
@@ -274,6 +274,109 @@ def envoyer_newsletter_hebdo():
         db.close()
 
 
+# Conversation dont l'annonce n'existe plus : conservée ce délai après le dernier message,
+# le temps de finaliser la remise de l'objet
+DELAI_CONVERSATION_SANS_ANNONCE_JOURS = 30
+
+
+def purger_conversations():
+    """Supprime les conversations abandonnées : annonce retirée et plus d'activité depuis 30 jours,
+    ou quittées par les deux participants. Une conversation signalée et non traitée est gardée
+    pour que l'équipe puisse la lire."""
+    db = SessionLocal()
+    try:
+        limite = datetime.now(timezone.utc) - timedelta(days=DELAI_CONVERSATION_SANS_ANNONCE_JOURS)
+        en_attente = (
+            db.query(models.Signalement.conversation_id)
+            .filter(models.Signalement.conversation_id != None, models.Signalement.traite == False)
+        )
+        db.query(models.Conversation).filter(
+            ((models.Conversation.annonce_id == None) & (models.Conversation.dernier_message_at < limite))
+            | ((models.Conversation.donneur_actif == False) & (models.Conversation.demandeur_actif == False)),
+            ~models.Conversation.id.in_(en_attente),
+        ).delete(synchronize_session=False)
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
+MAX_ANNONCES_PAR_EMAIL_ALERTE = 10
+
+
+def _annonces_pour_alerte(db, alerte, depuis, jusqua):
+    requete = db.query(models.Annonce).filter(
+        models.Annonce.created_at > depuis,
+        models.Annonce.created_at <= jusqua,
+        models.Annonce.donne_at == None,
+        models.Annonce.clerk_user_id != alerte.clerk_user_id,
+    )
+    if alerte.categorie:
+        requete = requete.filter(models.Annonce.categorie == alerte.categorie)
+    if alerte.quartier:
+        requete = requete.filter(models.Annonce.quartier == alerte.quartier)
+    if alerte.recherche:
+        requete = requete.filter(filtre_recherche(alerte.recherche, models.Annonce.titre, models.Annonce.description))
+    return requete.order_by(models.Annonce.created_at.desc()).limit(MAX_ANNONCES_PAR_EMAIL_ALERTE).all()
+
+
+def libelle_alerte(alerte) -> str:
+    morceaux = [f"« {alerte.recherche} »" if alerte.recherche else None, alerte.categorie, alerte.quartier]
+    return " · ".join(m for m in morceaux if m)
+
+
+def envoyer_alertes():
+    """Toutes les heures en journée : un seul email par utilisateur regroupant les nouveaux dons
+    qui correspondent à ses alertes."""
+    db = SessionLocal()
+    try:
+        maintenant = datetime.now(timezone.utc)
+        par_utilisateur = {}
+        for alerte in db.query(models.Alerte).order_by(models.Alerte.id).all():
+            par_utilisateur.setdefault(alerte.clerk_user_id, []).append(alerte)
+        frontend = emails.frontend_url()
+        for uid, alertes in par_utilisateur.items():
+            try:
+                trouvees, criteres = {}, []
+                for alerte in alertes:
+                    resultats = _annonces_pour_alerte(db, alerte, alerte.verifie_jusqu_a, maintenant)
+                    if resultats:
+                        criteres.append(libelle_alerte(alerte))
+                    for a in resultats:
+                        trouvees.setdefault(a.id, a)
+                if trouvees:
+                    email = clerk.email_utilisateur(uid)
+                    if email:
+                        annonces = list(trouvees.values())[:MAX_ANNONCES_PAR_EMAIL_ALERTE]
+                        lignes = "".join(
+                            f'<p style="margin:0 0 10px"><a href="{frontend}/annonces/{a.id}" '
+                            f'style="color:#111;font-weight:700;text-decoration:none">{escape(a.titre)}</a>'
+                            f'<br/><span style="color:#6b7280;font-size:13px">{escape(a.quartier)} · '
+                            f'{escape(a.categorie)}</span></p>'
+                            for a in annonces
+                        )
+                        corps = (
+                            f"<p>De nouveaux dons correspondent à vos alertes "
+                            f"({escape(', '.join(criteres))}) :</p>{lignes}"
+                            f'<p style="margin-top:20px">{emails.bouton(f"{frontend}/annonces", "Voir les dons")}</p>'
+                        )
+                        pied = f'<a href="{frontend}/profil" style="color:#9ca3af">Gérer ou supprimer mes alertes</a>'
+                        titre = "Nouveau don" if len(annonces) == 1 else f"{len(annonces)} nouveaux dons"
+                        emails.envoyer(
+                            email,
+                            f"{titre} pour votre alerte GenDon",
+                            emails.gabarit("Un don correspond à votre recherche", corps, pied),
+                        )
+                for alerte in alertes:
+                    alerte.verifie_jusqu_a = maintenant
+                db.commit()
+            except Exception:
+                db.rollback()
+    finally:
+        db.close()
+
+
 scheduler = BackgroundScheduler(daemon=True)
 
 
@@ -284,6 +387,10 @@ def planifier():
     options = {"misfire_grace_time": 3600, "coalesce": True}
     scheduler.add_job(purger_annonces_expirees, CronTrigger(hour=3, minute=0, timezone="Europe/Paris"), **options)
     scheduler.add_job(purger_images_orphelines, CronTrigger(hour=3, minute=30, timezone="Europe/Paris"), **options)
+    scheduler.add_job(purger_conversations, CronTrigger(hour=3, minute=15, timezone="Europe/Paris"), **options)
+    scheduler.add_job(
+        envoyer_alertes, CronTrigger(hour="8-21", minute=5, timezone="Europe/Paris"), **options
+    )
     scheduler.add_job(purger_journal_moderation, CronTrigger(hour=3, minute=45, timezone="Europe/Paris"), **options)
     scheduler.add_job(envoyer_rappels_expiration, CronTrigger(hour=10, minute=0, timezone="Europe/Paris"), **options)
     scheduler.add_job(nettoyer_rate_limit, "interval", minutes=30)

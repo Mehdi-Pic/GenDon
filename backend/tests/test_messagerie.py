@@ -1,4 +1,6 @@
-from app import models
+from datetime import datetime, timedelta, timezone
+
+from app import models, taches
 
 from helpers import publier
 
@@ -84,4 +86,183 @@ def test_signaler_conversation_raison_longue_et_repetee(client, utilisateur, db)
     assert client.post(f"/conversations/{cid}/signaler", json={"raison": "x" * 500}).status_code == 200
     assert client.post(f"/conversations/{cid}/signaler", json={"raison": "encore"}).status_code == 200
     signalement = db.query(models.Signalement).one()
-    assert signalement.raison.count(f"[Conversation #{cid}]") == 2
+    # Rattaché à la conversation elle-même (et non plus à l'annonce) : survit au retrait de l'annonce
+    assert signalement.conversation_id == cid and signalement.annonce_id is None
+    assert signalement.raison.endswith("\nencore")
+
+
+# ---------- Conversations indépendantes de l'annonce ----------
+
+def test_conversation_survit_a_la_suppression_de_l_annonce(client, utilisateur, db):
+    a, cid = conversation(client, utilisateur)
+    client.post(f"/conversations/{cid}/messages", json={"contenu": "Je passe ce soir"})
+    utilisateur.uid = "u1"
+    assert client.delete(f"/annonces/{a['id']}").status_code == 200
+
+    fil = client.get(f"/conversations/{cid}/messages").json()
+    assert fil["annonce_statut"] == "retiree"
+    assert fil["annonce_titre"] == "Canapé 3 places"
+    assert fil["messages"][0]["contenu"] == "Je passe ce soir"
+    # On peut encore finaliser la remise
+    assert client.post(f"/conversations/{cid}/messages", json={"contenu": "OK"}).status_code == 200
+    assert client.get("/conversations").json()[0]["annonce_titre"] == "Canapé 3 places"
+
+
+def test_titre_tenu_a_jour(client, utilisateur, db):
+    a, cid = conversation(client, utilisateur)
+    utilisateur.uid = "u1"
+    client.patch(f"/annonces/{a['id']}", json={
+        "titre": "Canapé 2 places", "description": "x", "categorie": "Mobilier", "quartier": "Le Luth", "images": [],
+    })
+    client.delete(f"/annonces/{a['id']}")
+    assert client.get(f"/conversations/{cid}/messages").json()["annonce_titre"] == "Canapé 2 places"
+
+
+def test_purge_conversations_abandonnees(client, utilisateur, db):
+    a, cid = conversation(client, utilisateur)
+    utilisateur.uid = "u1"
+    client.delete(f"/annonces/{a['id']}")
+    taches.purger_conversations()
+    assert db.query(models.Conversation).count() == 1  # encore récente
+
+    db.query(models.Conversation).update(
+        {models.Conversation.dernier_message_at: datetime.now(timezone.utc) - timedelta(days=31)}
+    )
+    db.commit()
+    taches.purger_conversations()
+    assert db.query(models.Conversation).count() == 0
+
+
+def test_conversation_signalee_gardee_pour_l_equipe(client, utilisateur, db):
+    _, cid = conversation(client, utilisateur)
+    client.post(f"/conversations/{cid}/signaler", json={"raison": "insultes"})
+    client.delete(f"/conversations/{cid}")
+    utilisateur.uid = "u1"
+    client.delete(f"/conversations/{cid}")
+    taches.purger_conversations()
+    assert db.query(models.Conversation).count() == 1
+    # Une fois le signalement traité, la purge la supprime
+    db.query(models.Signalement).update({models.Signalement.traite: True})
+    db.commit()
+    taches.purger_conversations()
+    assert db.query(models.Conversation).count() == 0
+    assert db.query(models.Signalement).one().conversation_id is None  # le motif reste lisible
+
+
+# ---------- Réservation ----------
+
+def test_reserver_previent_les_autres(client, utilisateur):
+    a, cid = conversation(client, utilisateur)
+    utilisateur.uid = "u3"
+    cid3 = client.post("/conversations", json={"annonce_id": a["id"]}).json()["id"]
+
+    utilisateur.uid = "u1"
+    reponse = client.post(f"/annonces/{a['id']}/reserver", json={"conversation_id": cid})
+    assert reponse.status_code == 200 and reponse.json()["statut"] == "reservee"
+    mes = client.get("/annonces/me").json()[0]
+    assert mes["nb_interesses"] == 2 and mes["reserve_pour_pseudo"] == "pseudo-u2"
+    assert client.get(f"/conversations/{cid}/messages").json()["reservee_ici"] is True
+
+    utilisateur.uid = "u3"
+    fil = client.get(f"/conversations/{cid3}/messages").json()
+    assert fil["annonce_statut"] == "reservee" and fil["reservee_ici"] is False
+    assert "réservé pour une autre personne" in fil["messages"][-1]["contenu"]
+    # Les messages système ne comptent pas comme non lus
+    assert client.get("/messages/non-lus").json()["non_lus"] == 0
+    # L'annonce reste visible avec son statut
+    assert client.get(f"/annonces/{a['id']}").json()["statut"] == "reservee"
+
+
+def test_seul_le_donneur_reserve(client, utilisateur):
+    a, cid = conversation(client, utilisateur)
+    assert client.post(f"/annonces/{a['id']}/reserver", json={"conversation_id": cid}).status_code == 403
+
+
+def test_reservation_levee_si_le_beneficiaire_quitte(client, utilisateur):
+    a, cid = conversation(client, utilisateur)
+    utilisateur.uid = "u3"
+    cid3 = client.post("/conversations", json={"annonce_id": a["id"]}).json()["id"]
+    utilisateur.uid = "u1"
+    client.post(f"/annonces/{a['id']}/reserver", json={"conversation_id": cid})
+    utilisateur.uid = "u2"
+    client.delete(f"/conversations/{cid}")
+    utilisateur.uid = "u3"
+    fil = client.get(f"/conversations/{cid3}/messages").json()
+    assert fil["annonce_statut"] == "disponible"
+    assert fil["messages"][-1]["contenu"] == "L'objet est de nouveau disponible."
+
+
+def test_liberer_puis_donner(client, utilisateur):
+    a, cid = conversation(client, utilisateur)
+    utilisateur.uid = "u1"
+    client.post(f"/annonces/{a['id']}/reserver", json={"conversation_id": cid})
+    assert client.post(f"/annonces/{a['id']}/liberer").json()["statut"] == "publiee"
+    client.post(f"/annonces/{a['id']}/donne")
+    utilisateur.uid = "u2"
+    fil = client.get(f"/conversations/{cid}/messages").json()
+    assert fil["annonce_statut"] == "donnee"
+    assert "a été donné" in fil["messages"][-1]["contenu"]
+
+
+# ---------- Préférence des emails de messages ----------
+
+def test_emails_messages_desactives(client, utilisateur, services):
+    _, cid = conversation(client, utilisateur)
+    utilisateur.uid = "u1"
+    assert client.get("/notifications/messages/moi").json() == {"actif": True}
+    client.put("/notifications/messages/moi", json={"actif": False})
+    assert client.get("/notifications/messages/moi").json() == {"actif": False}
+    utilisateur.uid = "u2"
+    client.post(f"/conversations/{cid}/messages", json={"contenu": "Bonjour"})
+    assert services.notifications == []
+
+
+def test_accuse_de_lecture(client, utilisateur):
+    _, cid = conversation(client, utilisateur)
+    client.post(f"/conversations/{cid}/messages", json={"contenu": "Bonjour"})
+    assert client.get(f"/conversations/{cid}/messages").json()["dernier_lu"] is False
+    utilisateur.uid = "u1"
+    client.post(f"/conversations/{cid}/lu")
+    utilisateur.uid = "u2"
+    assert client.get(f"/conversations/{cid}/messages").json()["dernier_lu"] is True
+
+
+# ---------- Modération des conversations ----------
+
+def test_equipe_lit_seulement_les_conversations_signalees(client, utilisateur, db):
+    _, cid = conversation(client, utilisateur)
+    client.post(f"/conversations/{cid}/messages", json={"contenu": "message déplacé"})
+    db.add(models.Role(clerk_user_id="modo", role="moderateur"))
+    db.commit()
+    utilisateur.uid = "modo"
+    assert client.get(f"/admin/conversations/{cid}").status_code == 404
+
+    utilisateur.uid = "u1"
+    client.post(f"/conversations/{cid}/signaler", json={"raison": "propos déplacés"})
+    utilisateur.uid = "modo"
+    fil = client.get(f"/admin/conversations/{cid}").json()
+    assert fil["messages"][0] == {**fil["messages"][0], "auteur": "demandeur", "contenu": "message déplacé"}
+    assert fil["demandeur"]["id"] == "u2"
+    signalement = client.get("/admin/signalements").json()[0]
+    assert signalement["type"] == "conversation" and signalement["conversation_id"] == cid
+    assert db.query(models.ActionModeration).filter_by(action="conversation_consultee").count() == 1
+
+    utilisateur.uid = "u3"  # simple utilisateur
+    assert client.get(f"/admin/conversations/{cid}").status_code == 403
+
+
+def test_suspension(client, utilisateur, db, monkeypatch):
+    from app import clerk
+    appels = []
+    monkeypatch.setattr(clerk, "suspendre", lambda uid, suspendu: appels.append((uid, suspendu)) or True)
+    db.add(models.Role(clerk_user_id="modo", role="moderateur"))
+    db.add(models.Role(clerk_user_id="modo2", role="moderateur"))
+    db.commit()
+    utilisateur.uid = "modo"
+    assert client.post("/admin/utilisateurs/u2/suspendre", json={"suspendu": True}).status_code == 200
+    assert appels == [("u2", True)]
+    # Un modérateur ne suspend ni un autre membre de l'équipe, ni lui-même
+    assert client.post("/admin/utilisateurs/modo2/suspendre", json={"suspendu": True}).status_code == 403
+    assert client.post("/admin/utilisateurs/modo/suspendre", json={"suspendu": True}).status_code == 400
+    utilisateur.uid = "u3"
+    assert client.post("/admin/utilisateurs/u2/suspendre", json={"suspendu": False}).status_code == 403

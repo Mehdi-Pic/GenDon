@@ -10,7 +10,7 @@ load_dotenv()
 
 from .migrations import migrer  # noqa: E402
 from .photos import router as router_photos  # noqa: E402
-from .routers import admin, annonces, comptes, contact, messagerie  # noqa: E402
+from .routers import admin, alertes, annonces, comptes, contact, messagerie  # noqa: E402
 from .taches import planifier, scheduler  # noqa: E402
 
 # Schéma de la base à jour avant de servir la moindre requête
@@ -55,5 +55,6 @@ def root():
     return {"message": "Gen Don API"}
 
 
-for module in (router_photos, annonces.router, messagerie.router, admin.router, comptes.router, contact.router):
+for module in (router_photos, annonces.router, messagerie.router, admin.router, comptes.router, contact.router,
+               alertes.router):
     app.include_router(module)

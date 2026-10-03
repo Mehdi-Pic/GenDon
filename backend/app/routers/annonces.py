@@ -2,13 +2,13 @@
 from datetime import datetime, timedelta, timezone
 from math import ceil
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel as PydanticBase, Field
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .. import clerk, models, schemas
+from .. import clerk, models, schemas, taches
 from ..auth import get_current_user_id, get_user_id_optionnel
 from ..database import get_db
 from ..outils import filtre_recherche, ip_client, limite_atteinte, verifier_rate_limit
@@ -26,6 +26,7 @@ def verifier_proprietaire(annonce: models.Annonce, user_id: str) -> None:
 @router.post("/annonces", response_model=schemas.AnnonceResponse)
 def créer_annonce(
     annonce: schemas.AnnonceCreate,
+    taches_fond: BackgroundTasks,
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
@@ -39,6 +40,8 @@ def créer_annonce(
     db.add(db_annonce)
     db.commit()
     db.refresh(db_annonce)
+    # Après la réponse : la personne qui publie n'attend pas l'envoi des alertes
+    taches_fond.add_task(taches.alerter_nouvelle_annonce, db_annonce.id)
     return db_annonce
 
 

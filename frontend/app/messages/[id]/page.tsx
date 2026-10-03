@@ -24,6 +24,8 @@ type Fil = {
   messages: Message[]
 }
 
+const HAUTEUR_MAX_SAISIE = 128 // px, environ 5 lignes
+
 // Bandeau d'état de l'objet, vu par chacun des deux participants
 function bandeau(fil: Fil): string | null {
   switch (fil.annonce_statut) {
@@ -119,13 +121,15 @@ export default function Conversation({ params }: { params: Promise<{ id: string 
     if (envoi) basRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [envoi])
 
-  // La zone de saisie s'agrandit avec le texte (jusqu'à max-h-32), puis défile
+  // La zone de saisie s'agrandit avec le texte jusqu'à HAUTEUR_MAX_SAISIE, puis seulement elle défile :
+  // sans overflow masqué, Chrome affiche une barre de défilement dès 1 px de débordement
   useEffect(() => {
     const el = zoneTexte.current
     if (!el) return
     el.style.height = "auto"
-    // scrollHeight exclut la bordure : sans elle, il manque 2 px et une barre de défilement apparaît
-    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`
+    const hauteur = el.scrollHeight + el.offsetHeight - el.clientHeight
+    el.style.height = `${Math.min(hauteur, HAUTEUR_MAX_SAISIE)}px`
+    el.style.overflowY = hauteur > HAUTEUR_MAX_SAISIE ? "auto" : "hidden"
   }, [texte])
 
   // Actions du donneur sur l'objet : réserver pour cette personne, annuler, déclarer donné
@@ -344,7 +348,7 @@ export default function Conversation({ params }: { params: Promise<{ id: string 
               maxLength={2000}
               rows={1}
               placeholder="Votre message..."
-              className="flex-1 border border-gray-200 rounded-2xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-500 resize-none max-h-32 overflow-y-auto"
+              className="flex-1 border border-gray-200 rounded-2xl px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-500 resize-none overflow-hidden"
             />
             <button
               type="submit"

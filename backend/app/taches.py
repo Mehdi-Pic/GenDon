@@ -2,12 +2,15 @@
 import os
 import time
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from html import escape
 
 import httpx
 import resend
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+
+from sqlalchemy import func
 
 from . import clerk, emails, models
 from .database import SessionLocal
@@ -326,51 +329,121 @@ def libelle_alerte(alerte) -> str:
     return " · ".join(m for m in morceaux if m)
 
 
-def envoyer_alertes():
-    """Toutes les heures en journée : un seul email par utilisateur regroupant les nouveaux dons
-    qui correspondent à ses alertes."""
+# Alertes : un email part dès qu'un don correspondant est publié (le premier qui écrit
+# récupère souvent l'objet), mais jamais plus d'un par heure et par personne, et jamais la nuit.
+# Les dons publiés entre-temps sont regroupés dans l'envoi suivant (tâche horaire).
+INTERVALLE_MIN_ALERTES = timedelta(hours=1)
+HEURE_DEBUT_ALERTES, HEURE_FIN_ALERTES = 8, 22  # heure de Paris, fin exclue
+
+
+def _heure_paris() -> int:
+    return datetime.now(ZoneInfo("Europe/Paris")).hour
+
+
+def alertes_autorisees() -> bool:
+    return HEURE_DEBUT_ALERTES <= _heure_paris() < HEURE_FIN_ALERTES
+
+
+def _email_alertes(email: str, annonces: list, criteres: list) -> None:
+    frontend = emails.frontend_url()
+    lignes = "".join(
+        f'<p style="margin:0 0 10px"><a href="{frontend}/annonces/{a.id}" '
+        f'style="color:#111;font-weight:700;text-decoration:none">{escape(a.titre)}</a>'
+        f'<br/><span style="color:#6b7280;font-size:13px">{escape(a.quartier)} · '
+        f'{escape(a.categorie)}</span></p>'
+        for a in annonces
+    )
+    corps = (
+        f"<p>De nouveaux dons correspondent à vos alertes "
+        f"({escape(', '.join(criteres))}) :</p>{lignes}"
+        f'<p style="margin-top:20px">{emails.bouton(f"{frontend}/annonces", "Voir les dons")}</p>'
+    )
+    pied = f'<a href="{frontend}/profil" style="color:#9ca3af">Gérer ou supprimer mes alertes</a>'
+    titre = "Nouveau don" if len(annonces) == 1 else f"{len(annonces)} nouveaux dons"
+    emails.envoyer(
+        email,
+        f"{titre} pour votre alerte GenDon",
+        emails.gabarit("Un don correspond à votre recherche", corps, pied),
+    )
+
+
+def traiter_alertes_utilisateur(db, uid: str) -> None:
+    """Envoie à un utilisateur, en un seul email, les nouveaux dons de toutes ses alertes,
+    sauf s'il en a déjà reçu un dans l'heure. Commit inclus."""
+    # Heure de la base, la même qui date les annonces (created_at) : pas de décalage d'horloge
+    maintenant = db.query(func.now()).scalar()
+    # Verrou sur ses alertes : deux publications simultanées n'envoient pas deux emails
+    alertes = (
+        db.query(models.Alerte)
+        .filter(models.Alerte.clerk_user_id == uid)
+        .order_by(models.Alerte.id)
+        .with_for_update()
+        .all()
+    )
+    if not alertes:
+        db.commit()
+        return
+    dernier = max((a.dernier_envoi_at for a in alertes if a.dernier_envoi_at), default=None)
+    if dernier and maintenant - dernier < INTERVALLE_MIN_ALERTES:
+        db.commit()  # trop tôt : ces dons partiront dans l'envoi suivant
+        return
+    trouvees, criteres = {}, []
+    for alerte in alertes:
+        resultats = _annonces_pour_alerte(db, alerte, alerte.verifie_jusqu_a, maintenant)
+        if resultats:
+            criteres.append(libelle_alerte(alerte))
+        for a in resultats:
+            trouvees.setdefault(a.id, a)
+    envoye = False
+    if trouvees:
+        email = clerk.email_utilisateur(uid)
+        if email:
+            _email_alertes(email, list(trouvees.values())[:MAX_ANNONCES_PAR_EMAIL_ALERTE], criteres)
+            envoye = True
+    for alerte in alertes:
+        alerte.verifie_jusqu_a = maintenant
+        if envoye:
+            alerte.dernier_envoi_at = maintenant
+    db.commit()
+
+
+def alerter_nouvelle_annonce(annonce_id: int) -> None:
+    """Après une publication (tâche de fond) : prévient tout de suite les personnes dont une
+    alerte correspond, dans la limite du plafond horaire et hors de la nuit."""
+    if not alertes_autorisees():
+        return  # l'envoi de 8 h regroupera les dons de la nuit
     db = SessionLocal()
     try:
-        maintenant = datetime.now(timezone.utc)
-        par_utilisateur = {}
-        for alerte in db.query(models.Alerte).order_by(models.Alerte.id).all():
-            par_utilisateur.setdefault(alerte.clerk_user_id, []).append(alerte)
-        frontend = emails.frontend_url()
-        for uid, alertes in par_utilisateur.items():
+        annonce = db.query(models.Annonce).filter(models.Annonce.id == annonce_id).first()
+        if not annonce:
+            return
+        candidats = {
+            uid for (uid,) in db.query(models.Alerte.clerk_user_id)
+            .filter(models.Alerte.clerk_user_id != annonce.clerk_user_id).distinct().all()
+        }
+        for uid in candidats:
+            # Seuls ceux dont une alerte correspond à cette annonce : les autres attendent l'heure suivante
+            if any(
+                annonce.id in {a.id for a in _annonces_pour_alerte(db, alerte, alerte.verifie_jusqu_a, annonce.created_at)}
+                for alerte in db.query(models.Alerte).filter(models.Alerte.clerk_user_id == uid).all()
+            ):
+                try:
+                    traiter_alertes_utilisateur(db, uid)
+                except Exception:
+                    db.rollback()
+    finally:
+        db.close()
+
+
+def envoyer_alertes():
+    """Toutes les heures en journée : envoie ce qui n'a pas pu partir immédiatement (plafond horaire, nuit)."""
+    if not alertes_autorisees():
+        return
+    db = SessionLocal()
+    try:
+        for (uid,) in db.query(models.Alerte.clerk_user_id).distinct().all():
             try:
-                trouvees, criteres = {}, []
-                for alerte in alertes:
-                    resultats = _annonces_pour_alerte(db, alerte, alerte.verifie_jusqu_a, maintenant)
-                    if resultats:
-                        criteres.append(libelle_alerte(alerte))
-                    for a in resultats:
-                        trouvees.setdefault(a.id, a)
-                if trouvees:
-                    email = clerk.email_utilisateur(uid)
-                    if email:
-                        annonces = list(trouvees.values())[:MAX_ANNONCES_PAR_EMAIL_ALERTE]
-                        lignes = "".join(
-                            f'<p style="margin:0 0 10px"><a href="{frontend}/annonces/{a.id}" '
-                            f'style="color:#111;font-weight:700;text-decoration:none">{escape(a.titre)}</a>'
-                            f'<br/><span style="color:#6b7280;font-size:13px">{escape(a.quartier)} · '
-                            f'{escape(a.categorie)}</span></p>'
-                            for a in annonces
-                        )
-                        corps = (
-                            f"<p>De nouveaux dons correspondent à vos alertes "
-                            f"({escape(', '.join(criteres))}) :</p>{lignes}"
-                            f'<p style="margin-top:20px">{emails.bouton(f"{frontend}/annonces", "Voir les dons")}</p>'
-                        )
-                        pied = f'<a href="{frontend}/profil" style="color:#9ca3af">Gérer ou supprimer mes alertes</a>'
-                        titre = "Nouveau don" if len(annonces) == 1 else f"{len(annonces)} nouveaux dons"
-                        emails.envoyer(
-                            email,
-                            f"{titre} pour votre alerte GenDon",
-                            emails.gabarit("Un don correspond à votre recherche", corps, pied),
-                        )
-                for alerte in alertes:
-                    alerte.verifie_jusqu_a = maintenant
-                db.commit()
+                traiter_alertes_utilisateur(db, uid)
             except Exception:
                 db.rollback()
     finally:
@@ -389,7 +462,7 @@ def planifier():
     scheduler.add_job(purger_images_orphelines, CronTrigger(hour=3, minute=30, timezone="Europe/Paris"), **options)
     scheduler.add_job(purger_conversations, CronTrigger(hour=3, minute=15, timezone="Europe/Paris"), **options)
     scheduler.add_job(
-        envoyer_alertes, CronTrigger(hour="8-21", minute=5, timezone="Europe/Paris"), **options
+        envoyer_alertes, CronTrigger(minute=5, timezone="Europe/Paris"), **options
     )
     scheduler.add_job(purger_journal_moderation, CronTrigger(hour=3, minute=45, timezone="Europe/Paris"), **options)
     scheduler.add_job(envoyer_rappels_expiration, CronTrigger(hour=10, minute=0, timezone="Europe/Paris"), **options)

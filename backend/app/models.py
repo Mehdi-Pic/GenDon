@@ -159,4 +159,6 @@ class Alerte(Base):
     quartier = Column(String(100), nullable=True)
     # Les annonces publiées avant cette date ont déjà été signalées (ou précèdent l'alerte)
     verifie_jusqu_a = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # Dernier email d'alerte envoyé à cet utilisateur (même valeur sur toutes ses alertes) : plafond horaire
+    dernier_envoi_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

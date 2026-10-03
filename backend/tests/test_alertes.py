@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
 import resend
 
 from app import models, taches
@@ -30,31 +31,68 @@ def test_creer_lister_supprimer_alertes(client):
     assert client.get("/alertes").json() == []
 
 
-def test_envoi_des_alertes(client, utilisateur, db, monkeypatch):
-    envoyes = []
+@pytest.fixture
+def boite(monkeypatch):
+    """Emails d'alerte envoyés ; heure de Paris fixée à midi (modifiable via boite.heure)."""
+    class Boite(list):
+        heure = 12
+    envoyes = Boite()
     monkeypatch.setattr(resend.Emails, "send", lambda payload: envoyes.append(payload))
     monkeypatch.setattr(taches.clerk, "email_utilisateur", lambda uid: f"{uid}@exemple.fr")
+    monkeypatch.setattr(taches, "_heure_paris", lambda: envoyes.heure)
+    return envoyes
 
-    utilisateur.uid = "u2"
-    client.post("/alertes", json={"recherche": "velo"})
-    publier(client, titre="Vélo à moi")  # sa propre annonce : jamais signalée
+
+def vieillir_dernier_envoi(db, minutes):
     db.query(models.Alerte).update(
-        {models.Alerte.verifie_jusqu_a: datetime.now(timezone.utc) - timedelta(minutes=5)}
+        {models.Alerte.dernier_envoi_at: datetime.now(timezone.utc) - timedelta(minutes=minutes)}
     )
     db.commit()
 
+
+def test_alerte_envoyee_des_la_publication(client, utilisateur, boite):
+    utilisateur.uid = "u2"
+    client.post("/alertes", json={"recherche": "velo"})
+    publier(client, titre="Vélo à moi")  # sa propre annonce : jamais signalée
+    assert boite == []
+
+    utilisateur.uid = "u1"
+    publier(client, titre="Table")
+    assert boite == []
+    publier(client, titre="Vélo de course")
+    assert len(boite) == 1 and boite[0]["to"] == ["u2@exemple.fr"]
+    assert "Vélo de course" in boite[0]["html"] and "Vélo à moi" not in boite[0]["html"]
+
+
+def test_un_email_par_heure_au_plus(client, utilisateur, db, boite):
+    utilisateur.uid = "u2"
+    client.post("/alertes", json={"recherche": "velo"})
     utilisateur.uid = "u1"
     publier(client, titre="Vélo de course")
-    publier(client, titre="Table")
-    taches.envoyer_alertes()
-    assert len(envoyes) == 1
-    assert envoyes[0]["to"] == ["u2@exemple.fr"]
-    assert "Vélo de course" in envoyes[0]["html"]
-    assert "Table" not in envoyes[0]["html"] and "Vélo à moi" not in envoyes[0]["html"]
+    publier(client, titre="Vélo enfant")  # dans l'heure : pas de second email
+    assert len(boite) == 1
+    taches.envoyer_alertes()  # tâche horaire, toujours dans l'heure
+    assert len(boite) == 1
 
-    # Déjà signalée : pas de second email
+    vieillir_dernier_envoi(db, 61)
     taches.envoyer_alertes()
-    assert len(envoyes) == 1
+    assert len(boite) == 2
+    assert "Vélo enfant" in boite[1]["html"] and "Vélo de course" not in boite[1]["html"]
+    taches.envoyer_alertes()  # rien de nouveau
+    assert len(boite) == 2
+
+
+def test_pas_d_alerte_la_nuit(client, utilisateur, boite):
+    utilisateur.uid = "u2"
+    client.post("/alertes", json={"recherche": "velo"})
+    boite.heure = 23
+    utilisateur.uid = "u1"
+    publier(client, titre="Vélo de course")
+    taches.envoyer_alertes()
+    assert boite == []
+    boite.heure = 8  # premier envoi du matin : les dons de la nuit
+    taches.envoyer_alertes()
+    assert len(boite) == 1 and "Vélo de course" in boite[0]["html"]
 
 
 def test_suppression_de_compte_efface_les_alertes(client, db):

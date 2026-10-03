@@ -14,7 +14,7 @@ from sqlalchemy import func
 
 from . import clerk, emails, models
 from .database import SessionLocal
-from .outils import filtre_recherche, nettoyer_rate_limit
+from .outils import auteur_non_suspendu, filtre_recherche, nettoyer_rate_limit
 from .photos import supprimer_images_cloudinary
 
 
@@ -163,7 +163,7 @@ def envoyer_newsletter_hebdo():
     try:
         annonces = (
             db.query(models.Annonce)
-            .filter(models.Annonce.donne_at == None)
+            .filter(models.Annonce.donne_at == None, auteur_non_suspendu())
             .order_by(models.Annonce.created_at.desc())
             .limit(5)
             .all()
@@ -314,6 +314,7 @@ def _annonces_pour_alerte(db, alerte, depuis, jusqua):
         models.Annonce.created_at <= jusqua,
         models.Annonce.donne_at == None,
         models.Annonce.clerk_user_id != alerte.clerk_user_id,
+        auteur_non_suspendu(),
     )
     if alerte.categorie:
         requete = requete.filter(models.Annonce.categorie == alerte.categorie)

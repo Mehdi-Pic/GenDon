@@ -4,7 +4,7 @@ import time
 from collections import defaultdict, deque
 
 from fastapi import HTTPException, Request
-from sqlalchemy import func
+from sqlalchemy import func, or_, select
 
 # Rate limiting en mémoire par utilisateur (1 seule instance Railway).
 _appels: dict = defaultdict(deque)
@@ -79,3 +79,21 @@ def filtre_recherche(terme: str, *colonnes):
         c = colonne_sans_accents(colonne).like(motif, escape="\\")
         condition = c if condition is None else condition | c
     return condition
+
+
+def auteur_non_suspendu():
+    """Condition SQL : l'annonce n'appartient pas à un compte suspendu (les annonces sans
+    auteur connu restent visibles : NOT IN seul les exclurait, NULL n'étant jamais « pas dans »)."""
+    from . import models
+    suspendus = select(models.CompteSuspendu.clerk_user_id)
+    return or_(models.Annonce.clerk_user_id == None, models.Annonce.clerk_user_id.not_in(suspendus))  # noqa: E711
+
+
+def enregistrer_suspension(db, clerk_user_id: str, suspendu: bool) -> None:
+    """Tient la table locale à jour (sans commit)."""
+    from . import models
+    existant = db.query(models.CompteSuspendu).filter(models.CompteSuspendu.clerk_user_id == clerk_user_id).first()
+    if suspendu and not existant:
+        db.add(models.CompteSuspendu(clerk_user_id=clerk_user_id))
+    elif not suspendu and existant:
+        db.delete(existant)

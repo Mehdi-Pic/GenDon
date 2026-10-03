@@ -269,3 +269,56 @@ def test_suspension(client, utilisateur, db, monkeypatch):
     assert client.post("/admin/utilisateurs/modo/suspendre", json={"suspendu": True}).status_code == 400
     utilisateur.uid = "u3"
     assert client.post("/admin/utilisateurs/u2/suspendre", json={"suspendu": False}).status_code == 403
+
+
+def test_annonces_d_un_compte_suspendu_masquees(client, utilisateur, db, monkeypatch):
+    from app import clerk
+    monkeypatch.setattr(clerk, "suspendre", lambda uid, suspendu: True)
+    a, cid = conversation(client, utilisateur)  # u1 publie, u2 écrit
+    db.add(models.Role(clerk_user_id="modo", role="moderateur"))
+    db.commit()
+    utilisateur.uid = "modo"
+    client.post("/admin/utilisateurs/u1/suspendre", json={"suspendu": True})
+
+    utilisateur.uid = "u3"
+    assert client.get("/annonces").json()["total"] == 0
+    assert client.get(f"/annonces/{a['id']}").status_code == 404
+    assert client.get("/stats").json()["annonces"] == 0
+    assert client.post("/conversations", json={"annonce_id": a["id"]}).status_code == 404
+
+    utilisateur.uid = "modo"
+    client.post("/admin/utilisateurs/u1/suspendre", json={"suspendu": False})
+    utilisateur.uid = "u3"
+    assert client.get("/annonces").json()["total"] == 1
+
+
+def test_etat_de_suspension_dans_la_conversation_signalee(client, utilisateur, db, monkeypatch):
+    from app import clerk
+    monkeypatch.setattr(clerk, "suspendre", lambda uid, suspendu: True)
+    _, cid = conversation(client, utilisateur)
+    client.post(f"/conversations/{cid}/signaler", json={"raison": "insultes"})
+    db.add(models.Role(clerk_user_id="modo", role="moderateur"))
+    db.commit()
+    utilisateur.uid = "modo"
+    assert client.get(f"/admin/conversations/{cid}").json()["demandeur"]["suspendu"] is False
+    client.post("/admin/utilisateurs/u2/suspendre", json={"suspendu": True})
+    fil = client.get(f"/admin/conversations/{cid}").json()
+    assert fil["demandeur"]["suspendu"] is True and fil["donneur"]["suspendu"] is False
+
+
+def test_bannissement_depuis_clerk_synchronise(client, db):
+    from app.routers import comptes
+    publier(client)
+    comptes._traiter_evenement_clerk({"type": "user.updated", "data": {"id": "u1", "username": "x", "banned": True}})
+    assert client.get("/annonces").json()["total"] == 0
+    comptes._traiter_evenement_clerk({"type": "user.updated", "data": {"id": "u1", "username": "x", "banned": False}})
+    assert client.get("/annonces").json()["total"] == 1
+
+
+def test_journal_affiche_les_pseudos(client, utilisateur, db, monkeypatch):
+    monkeypatch.setenv("ADMIN_USER_ID", "admin1")
+    _, cid = conversation(client, utilisateur)
+    client.post(f"/conversations/{cid}/signaler", json={"raison": "insultes"})
+    utilisateur.uid = "admin1"
+    client.get(f"/admin/conversations/{cid}")
+    assert client.get("/admin/journal").json()[0]["par"] == "pseudo-admin1"

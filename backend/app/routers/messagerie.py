@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from .. import clerk, emails, models
 from ..auth import get_current_user_id
 from ..database import get_db
-from ..outils import verifier_rate_limit
+from ..outils import auteur_non_suspendu, verifier_rate_limit
 
 router = APIRouter()
 
@@ -104,7 +104,9 @@ def demarrer_conversation(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    annonce = db.query(models.Annonce).filter(models.Annonce.id == data.annonce_id).first()
+    annonce = (
+        db.query(models.Annonce).filter(models.Annonce.id == data.annonce_id, auteur_non_suspendu()).first()
+    )
     if not annonce:
         raise HTTPException(status_code=404, detail="Annonce introuvable")
     if not annonce.clerk_user_id:

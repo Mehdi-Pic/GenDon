@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from .. import clerk, models, schemas, taches
 from ..auth import get_current_user_id, get_user_id_optionnel
 from ..database import get_db
-from ..outils import filtre_recherche, ip_client, limite_atteinte, verifier_rate_limit
+from ..outils import auteur_non_suspendu, filtre_recherche, ip_client, limite_atteinte, verifier_rate_limit
 from ..photos import supprimer_images_cloudinary, valider_images
 from .messagerie import informer_les_demandeurs, liberer_reservation, message_systeme
 
@@ -49,7 +49,7 @@ def créer_annonce(
 def stats_publiques(db: Session = Depends(get_db)):
     """Chiffres affiches sur la page d'accueil : deux COUNT, pas de donnees personnelles."""
     return {
-        "annonces": db.query(models.Annonce).filter(models.Annonce.donne_at == None).count(),
+        "annonces": db.query(models.Annonce).filter(models.Annonce.donne_at == None, auteur_non_suspendu()).count(),
         "dons_realises": db.query(models.DonRealise).count(),
     }
 
@@ -69,7 +69,7 @@ def lister_annonces(
     user_id: str = Depends(get_user_id_optionnel),
 ):
     page = max(1, page)
-    query = db.query(models.Annonce).filter(models.Annonce.donne_at == None)
+    query = db.query(models.Annonce).filter(models.Annonce.donne_at == None, auteur_non_suspendu())
     if categorie:
         query = query.filter(models.Annonce.categorie == categorie)
     if recherche:
@@ -140,7 +140,10 @@ def get_annonce(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_user_id_optionnel),
 ):
-    annonce = db.query(models.Annonce).filter(models.Annonce.id == annonce_id).first()
+    # Annonce d'un compte suspendu : introuvable pour le public (l'équipe la retrouve dans l'admin)
+    annonce = (
+        db.query(models.Annonce).filter(models.Annonce.id == annonce_id, auteur_non_suspendu()).first()
+    )
     if not annonce:
         raise HTTPException(status_code=404, detail="Annonce introuvable")
     annonce.est_proprietaire = bool(user_id and annonce.clerk_user_id == user_id)
@@ -385,7 +388,7 @@ def mes_favoris(
     annonces = (
         db.query(models.Annonce)
         .join(models.Favori, models.Favori.annonce_id == models.Annonce.id)
-        .filter(models.Favori.clerk_user_id == user_id)
+        .filter(models.Favori.clerk_user_id == user_id, auteur_non_suspendu())
         .order_by(models.Favori.created_at.desc())
         .all()
     )

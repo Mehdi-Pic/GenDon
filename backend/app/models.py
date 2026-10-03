@@ -162,3 +162,12 @@ class Alerte(Base):
     # Dernier email d'alerte envoyé à cet utilisateur (même valeur sur toutes ses alertes) : plafond horaire
     dernier_envoi_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class CompteSuspendu(Base):
+    """Comptes suspendus (bannis chez Clerk) : leurs annonces sont masquées du site."""
+    __tablename__ = "comptes_suspendus"
+
+    id = Column(Integer, primary_key=True, index=True)
+    clerk_user_id = Column(String(100), nullable=False, unique=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

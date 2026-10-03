@@ -3,11 +3,11 @@
 import { use, useEffect, useState } from "react"
 import { useAuth } from "@clerk/nextjs"
 import Link from "next/link"
-import { ArrowLeft, Ban } from "lucide-react"
+import { ArrowLeft, Ban, RotateCcw } from "lucide-react"
 import { libelleJour, memeJour } from "../../../lib/annonces"
 import { changerSuspension } from "../../suspension"
 
-type Participant = { id: string; pseudo: string }
+type Participant = { id: string; pseudo: string; suspendu: boolean }
 type Message = { id: number; auteur: "donneur" | "demandeur" | "systeme"; contenu: string; created_at: string }
 type Fil = {
   id: number
@@ -24,7 +24,6 @@ export default function AdminConversation({ params }: { params: Promise<{ id: st
   const { getToken } = useAuth()
   const [fil, setFil] = useState<Fil | null>(null)
   const [etat, setEtat] = useState<"chargement" | "ok" | "introuvable">("chargement")
-  const [suspendus, setSuspendus] = useState<string[]>([])
 
   useEffect(() => {
     let actif = true
@@ -48,8 +47,11 @@ export default function AdminConversation({ params }: { params: Promise<{ id: st
     return () => { actif = false }
   }, [id, getToken])
 
-  async function suspendre(p: Participant) {
-    if (await changerSuspension(getToken, p.id, p.pseudo, true)) setSuspendus((prev) => [...prev, p.id])
+  // L'état vient du serveur : il reste juste quand on revient sur la page plus tard
+  async function basculer(p: Participant) {
+    if (!fil || !(await changerSuspension(getToken, p.id, p.pseudo, !p.suspendu))) return
+    const maj = (x: Participant) => (x.id === p.id ? { ...x, suspendu: !p.suspendu } : x)
+    setFil({ ...fil, donneur: maj(fil.donneur), demandeur: maj(fil.demandeur) })
   }
 
   if (etat === "chargement") return <p className="text-gray-400">Chargement...</p>
@@ -91,17 +93,18 @@ export default function AdminConversation({ params }: { params: Promise<{ id: st
               <p className="text-xs text-gray-400">{p.role}</p>
               <p className="text-sm font-semibold text-gray-900">{p.pseudo}</p>
             </div>
-            {suspendus.includes(p.id) ? (
+            {p.suspendu && (
               <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Suspendu</span>
-            ) : (
-              <button
-                onClick={() => suspendre(p)}
-                className="flex items-center gap-1.5 border border-red-100 hover:border-red-300 text-red-500 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-              >
-                <Ban className="w-3.5 h-3.5" />
-                Suspendre
-              </button>
             )}
+            <button
+              onClick={() => basculer(p)}
+              className={`flex items-center gap-1.5 border px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                p.suspendu ? "border-gray-200 hover:border-gray-400 text-gray-600" : "border-red-100 hover:border-red-300 text-red-500"
+              }`}
+            >
+              {p.suspendu ? <RotateCcw className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
+              {p.suspendu ? "Réactiver" : "Suspendre"}
+            </button>
           </div>
         ))}
       </div>

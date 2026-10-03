@@ -11,6 +11,7 @@ from svix.webhooks import Webhook, WebhookVerificationError
 from .. import clerk, emails, models
 from ..auth import get_current_user_id
 from ..database import SessionLocal, get_db
+from ..outils import enregistrer_suspension
 from ..photos import supprimer_images_cloudinary
 from .messagerie import liberer_reservation
 
@@ -54,7 +55,8 @@ def purger_donnees_utilisateur(db: Session, clerk_user_id: str):
     db.query(models.Favori).filter(models.Favori.clerk_user_id == clerk_user_id).delete()
     db.query(models.Signalement).filter(models.Signalement.clerk_user_id == clerk_user_id).delete()
     db.query(models.Role).filter(models.Role.clerk_user_id == clerk_user_id).delete()
-    for table in (models.DesabonnementNewsletter, models.DesabonnementMessages, models.Alerte):
+    for table in (models.DesabonnementNewsletter, models.DesabonnementMessages, models.Alerte,
+                  models.CompteSuspendu):
         db.query(table).filter(table.clerk_user_id == clerk_user_id).delete()
     db.commit()
     supprimer_images_cloudinary(list(set(images)))
@@ -88,6 +90,10 @@ def _traiter_evenement_clerk(evenement: dict):
             purger_donnees_utilisateur(db, uid)
         elif type_evenement == "user.updated":
             mettre_a_jour_pseudo(db, uid, clerk.pseudo_depuis_clerk(data))
+            # Bannissement fait directement depuis le dashboard Clerk
+            if "banned" in data:
+                enregistrer_suspension(db, uid, bool(data["banned"]))
+                db.commit()
     finally:
         db.close()
 

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from .. import clerk, models, roles, schemas
 from ..database import get_db
-from ..outils import filtre_recherche
+from ..outils import enregistrer_suspension, filtre_recherche
 from ..photos import supprimer_images_cloudinary
 from ..roles import exiger_admin, exiger_moderateur, journaliser
 from . import contact
@@ -187,6 +187,10 @@ def admin_lire_conversation(
         .all()
     )
     journaliser(db, acteur["user_id"], "conversation_consultee", f"conversation #{conversation_id}")
+    suspendus = {
+        uid for (uid,) in db.query(models.CompteSuspendu.clerk_user_id)
+        .filter(models.CompteSuspendu.clerk_user_id.in_([conv.donneur_id, conv.demandeur_id])).all()
+    }
 
     def auteur(m):
         if m.systeme:
@@ -197,8 +201,10 @@ def admin_lire_conversation(
         "id": conv.id,
         "annonce_id": conv.annonce_id,
         "annonce_titre": conv.annonce_titre,
-        "donneur": {"id": conv.donneur_id, "pseudo": conv.donneur_pseudo},
-        "demandeur": {"id": conv.demandeur_id, "pseudo": conv.demandeur_pseudo},
+        "donneur": {"id": conv.donneur_id, "pseudo": conv.donneur_pseudo, "suspendu": conv.donneur_id in suspendus},
+        "demandeur": {
+            "id": conv.demandeur_id, "pseudo": conv.demandeur_pseudo, "suspendu": conv.demandeur_id in suspendus,
+        },
         "messages": [
             {"id": m.id, "auteur": auteur(m), "contenu": m.contenu, "created_at": m.created_at} for m in messages
         ],
@@ -231,8 +237,13 @@ def admin_journal(
         .limit(200)
         .all()
     )
+    # Pseudo de chaque membre de l'équipe (quelques personnes : un appel Clerk par membre)
+    pseudos = {uid: clerk.pseudo_clerk(uid) for uid in {l.clerk_user_id for l in lignes}}
     return [
-        {"id": l.id, "par": l.clerk_user_id, "action": l.action, "details": l.details, "created_at": l.created_at}
+        {
+            "id": l.id, "par": pseudos.get(l.clerk_user_id, l.clerk_user_id), "action": l.action,
+            "details": l.details, "created_at": l.created_at,
+        }
         for l in lignes
     ]
 
@@ -257,6 +268,8 @@ def admin_suspendre_utilisateur(
         raise HTTPException(status_code=403, detail="Ce compte ne peut pas être suspendu par vous")
     if not clerk.suspendre(uid, data.suspendu):
         raise HTTPException(status_code=502, detail="Clerk n'a pas pu appliquer la suspension")
+    enregistrer_suspension(db, uid, data.suspendu)
+    db.commit()
     pseudo = clerk.pseudo_clerk(uid)
     journaliser(db, acteur["user_id"], "suspension" if data.suspendu else "reactivation", f"{pseudo} ({uid})")
     return {"suspendu": data.suspendu}

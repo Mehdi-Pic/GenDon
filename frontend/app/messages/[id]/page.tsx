@@ -124,7 +124,8 @@ export default function Conversation({ params }: { params: Promise<{ id: string 
     const el = zoneTexte.current
     if (!el) return
     el.style.height = "auto"
-    el.style.height = `${el.scrollHeight}px`
+    // scrollHeight exclut la bordure : sans elle, il manque 2 px et une barre de défilement apparaît
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`
   }, [texte])
 
   // Actions du donneur sur l'objet : réserver pour cette personne, annuler, déclarer donné

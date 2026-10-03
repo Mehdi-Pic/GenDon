@@ -286,9 +286,9 @@ def reserver_annonce(
             message_systeme(db, ancienne, "La réservation est annulée : l'objet a été promis à une autre personne.")
     annonce.statut = "reservee"
     annonce.reserve_pour = conv.demandeur_id
-    message_systeme(db, conv, f"{annonce.pseudo} vous a réservé l'objet. Convenez ensemble de la remise.")
+    message_systeme(db, conv, f"Objet réservé pour {conv.demandeur_pseudo}.")
     informer_les_demandeurs(
-        db, annonce_id, "L'objet est réservé pour une autre personne. Vous serez prévenu s'il redevient disponible.",
+        db, annonce_id, "Objet réservé pour une autre personne. Un message l'indiquera ici s'il redevient disponible.",
         sauf_conversation=conv.id,
     )
     db.commit()

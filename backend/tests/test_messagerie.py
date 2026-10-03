@@ -161,12 +161,15 @@ def test_reserver_previent_les_autres(client, utilisateur):
     assert reponse.status_code == 200 and reponse.json()["statut"] == "reservee"
     mes = client.get("/annonces/me").json()[0]
     assert mes["nb_interesses"] == 2 and mes["reserve_pour_pseudo"] == "pseudo-u2"
-    assert client.get(f"/conversations/{cid}/messages").json()["reservee_ici"] is True
+    fil = client.get(f"/conversations/{cid}/messages").json()
+    assert fil["reservee_ici"] is True
+    # Lu par les deux participants : formulation neutre
+    assert fil["messages"][-1]["contenu"] == "Objet réservé pour pseudo-u2."
 
     utilisateur.uid = "u3"
     fil = client.get(f"/conversations/{cid3}/messages").json()
     assert fil["annonce_statut"] == "reservee" and fil["reservee_ici"] is False
-    assert "réservé pour une autre personne" in fil["messages"][-1]["contenu"]
+    assert "Objet réservé pour une autre personne" in fil["messages"][-1]["contenu"]
     # Les messages système ne comptent pas comme non lus
     assert client.get("/messages/non-lus").json()["non_lus"] == 0
     # L'annonce reste visible avec son statut

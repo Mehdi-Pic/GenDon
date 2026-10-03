@@ -26,6 +26,11 @@ export default function AnnonceCard({ annonce }: { annonce: Annonce }) {
             <FavoriButton annonceId={annonce.id} initial={annonce.est_favori ?? false} />
           )}
         </div>
+        {annonce.statut === "reservee" && (
+          <span className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 bg-amber-500 text-white text-[11px] sm:text-xs font-semibold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full shadow-sm">
+            Réservé
+          </span>
+        )}
         <span className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 flex items-center gap-1 bg-white/90 backdrop-blur-sm text-gray-700 text-[11px] sm:text-xs font-semibold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full">
           <Eye className="w-3 h-3" aria-hidden="true" />
           {annonce.vues ?? 0}

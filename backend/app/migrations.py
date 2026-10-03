@@ -3,7 +3,8 @@
 Avant Alembic, les tables étaient créées par create_all() et les colonnes ajoutées à la main
 au démarrage. Une base de cette époque (sans table alembic_version) est d'abord complétée
 par ces anciennes retouches, puis marquée « 0001 » ; les migrations suivantes s'appliquent
-ensuite normalement.
+ensuite normalement. Toutes les tables existent déjà dans une telle base : l'ancien code
+lançait create_all() à chaque démarrage.
 """
 from pathlib import Path
 
@@ -57,21 +58,9 @@ def _mettre_a_niveau_ancienne_base(conn) -> None:
     col_msg = colonnes("messages")
     if col_msg is not None and "systeme" not in col_msg:
         conn.execute(text("ALTER TABLE messages ADD COLUMN systeme BOOLEAN NOT NULL DEFAULT FALSE"))
-    # Tables apparues après la création de la base : créées comme le faisait create_all()
-    from . import models
-    models.Base.metadata.create_all(
-        bind=conn,
-        tables=[t for t in models.Base.metadata.sorted_tables if t.name in _TABLES_INITIALES],
-    )
     # Le compteur démarre à 1 : un don avait déjà abouti avant l'ajout de cette fonctionnalité
     if not conn.execute(text("SELECT COUNT(*) FROM dons_realises")).scalar():
         conn.execute(text("INSERT INTO dons_realises (titre) VALUES ('Don realise avant le suivi')"))
-
-
-_TABLES_INITIALES = {
-    "annonces", "favoris", "roles", "signalements", "actions_moderation", "conversations",
-    "messages", "desabonnements_newsletter", "dons_realises", "images_uploadees",
-}
 
 
 def migrer() -> None:

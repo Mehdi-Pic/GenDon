@@ -45,6 +45,11 @@ jobs:
         run: pytest -q
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gendon_test
+      # Après les tests, la base est au schéma des migrations : il doit correspondre à app/models.py
+      - name: Migrations à jour avec les modèles
+        run: alembic check
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gendon_test
 
   frontend:
     name: Frontend (TypeScript)
@@ -72,3 +77,12 @@ jobs:
       # Bloquant : aucune erreur ni aucun avertissement toléré
       - name: Lint
         run: npx eslint app --max-warnings 0
+      # Une erreur de build n'apparaissait qu'au déploiement sur Vercel. Clés factices :
+      # la clé Clerk n'a que le bon format, l'API pointe vers une adresse injoignable.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhlbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
+          CLERK_SECRET_KEY: sk_test_ci
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:9
+          NEXT_TELEMETRY_DISABLED: 1

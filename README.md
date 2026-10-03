@@ -16,8 +16,10 @@ Projet d'apprentissage du développement web (frontend, backend et services exte
 ## Ce qu'on peut faire sur GenDon
 
 - 📝 **Donner** : déposer une annonce avec jusqu'à 5 photos, en quelques minutes
-- 🔎 **Chercher** : parcourir les dons par catégorie, par quartier ou par mot-clé
+- 🔎 **Chercher** : parcourir les dons par catégorie, par quartier ou par mot-clé (accents facultatifs)
 - 💬 **Échanger** : discuter avec le donneur via la messagerie du site, sans partager son adresse email
+- 📌 **Réserver** : le donneur réserve l'objet pour une personne, les autres intéressés sont prévenus
+- 🔔 **Être alerté** : enregistrer une recherche et recevoir un email dès qu'un don correspondant est publié
 - ❤️ **Suivre** : garder ses annonces préférées en favoris
 - ✅ **Clôturer** : indiquer qu'un objet a été donné ; chaque don réalisé est compté sur la page d'accueil
 - 🔁 **Prolonger** : une annonce reste en ligne 30 jours et peut être renouvelée

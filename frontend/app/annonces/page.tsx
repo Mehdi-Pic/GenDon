@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import AnnonceCard from "../components/AnnonceCard"
 import FiltrePanel from "./FiltrePanel"
+import AlerteBouton from "./AlerteBouton"
 import ServiceIndisponible from "../components/ServiceIndisponible"
 import { auth } from "@clerk/nextjs/server"
 import type { Annonce } from "../lib/annonces"
@@ -104,7 +105,8 @@ export default async function Annonces({ searchParams }: { searchParams: Promise
             </h1>
             <p className="text-sm text-gray-500 mt-1">{total} objet{total > 1 ? "s" : ""} à donner à Gennevilliers</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <AlerteBouton recherche={recherche} categorie={categorie} quartier={sp.quartier} />
             {(categorie || recherche) && (
               <Link href="/annonces" className="text-sm text-gray-500 hover:text-gray-900 border border-gray-200 hover:border-gray-400 px-4 py-2 rounded-full transition-colors">
                 Voir tout

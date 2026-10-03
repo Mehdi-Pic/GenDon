@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useAuth } from "@clerk/nextjs"
-import { ShieldCheck, Shield, Search, UserPlus, UserMinus } from "lucide-react"
+import { ShieldCheck, Shield, Search, UserPlus, UserMinus, Ban, RotateCcw } from "lucide-react"
 import { useAdmin } from "../adminContext"
+import { changerSuspension } from "../suspension"
 
 type Utilisateur = {
   id: string
@@ -14,6 +15,7 @@ type Utilisateur = {
   nb_annonces: number
   role: string | null
   est_admin_principal: boolean
+  suspendu: boolean
 }
 
 export default function AdminUtilisateurs() {
@@ -58,6 +60,17 @@ export default function AdminUtilisateurs() {
       }
       const data = await res.json()
       setUtilisateurs((prev) => prev.map((x) => (x.id === u.id ? { ...x, role: data.role } : x)))
+    } finally {
+      setEnCours(null)
+    }
+  }
+
+  async function suspendre(u: Utilisateur, suspendu: boolean) {
+    setEnCours(u.id)
+    try {
+      if (await changerSuspension(getToken, u.id, u.pseudo, suspendu)) {
+        setUtilisateurs((prev) => prev.map((x) => (x.id === u.id ? { ...x, suspendu } : x)))
+      }
     } finally {
       setEnCours(null)
     }
@@ -115,6 +128,9 @@ export default function AdminUtilisateurs() {
                   {u.role === "moderateur" && (
                     <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full"><Shield className="w-3 h-3" />Modérateur</span>
                   )}
+                  {u.suspendu && (
+                    <span className="inline-flex items-center gap-1 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full"><Ban className="w-3 h-3" />Suspendu</span>
+                  )}
                 </div>
                 {monRole === "admin" && (
                   <p className="text-xs text-gray-400 truncate">{u.email ?? "email inconnu"}</p>
@@ -123,6 +139,20 @@ export default function AdminUtilisateurs() {
                   inscrit le {new Date(u.created_at).toLocaleDateString("fr-FR")} · {u.nb_annonces} annonce{u.nb_annonces > 1 ? "s" : ""}
                 </p>
               </div>
+              {/* Suspension : utilisateurs ordinaires pour un modérateur, toute l'équipe sauf les admins principaux pour un admin */}
+              {!u.est_admin_principal && u.role !== "admin" && (monRole === "admin" || !u.role) && (
+                <button
+                  onClick={() => suspendre(u, !u.suspendu)}
+                  disabled={enCours === u.id}
+                  aria-label={u.suspendu ? `Réactiver ${u.pseudo}` : `Suspendre ${u.pseudo}`}
+                  className={`shrink-0 flex items-center gap-1.5 border p-2 sm:px-3 sm:py-1.5 rounded-full text-xs font-medium transition-colors disabled:opacity-50 ${
+                    u.suspendu ? "border-gray-200 hover:border-gray-400 text-gray-600" : "border-red-100 hover:border-red-300 text-red-500"
+                  }`}
+                >
+                  {u.suspendu ? <RotateCcw className="w-4 h-4 sm:w-3.5 sm:h-3.5" /> : <Ban className="w-4 h-4 sm:w-3.5 sm:h-3.5" />}
+                  <span className="hidden sm:inline">{u.suspendu ? "Réactiver" : "Suspendre"}</span>
+                </button>
+              )}
               {monRole === "admin" && !u.est_admin_principal && (
                 <div className="shrink-0">
                   {u.role === "moderateur" ? (

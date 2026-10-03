@@ -106,7 +106,12 @@ export default async function Annonces({ searchParams }: { searchParams: Promise
             <p className="text-sm text-gray-500 mt-1">{total} objet{total > 1 ? "s" : ""} à donner à Gennevilliers</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3">
-            <AlerteBouton recherche={recherche} categorie={categorie} quartier={sp.quartier} />
+            <AlerteBouton
+              key={`${recherche ?? ""}|${categorie ?? ""}|${sp.quartier ?? ""}`}
+              recherche={recherche}
+              categorie={categorie}
+              quartier={sp.quartier}
+            />
             {(categorie || recherche) && (
               <Link href="/annonces" className="text-sm text-gray-500 hover:text-gray-900 border border-gray-200 hover:border-gray-400 px-4 py-2 rounded-full transition-colors">
                 Voir tout

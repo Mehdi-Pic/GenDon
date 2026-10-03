@@ -348,7 +348,7 @@ def _email_alertes(email: str, annonces: list, criteres: list) -> None:
     frontend = emails.frontend_url()
     lignes = "".join(
         f'<p style="margin:0 0 10px"><a href="{frontend}/annonces/{a.id}" '
-        f'style="color:#111;font-weight:700;text-decoration:none">{escape(a.titre)}</a>'
+        f'style="color:#16a34a;font-weight:700;text-decoration:underline">{escape(a.titre)}</a>'
         f'<br/><span style="color:#6b7280;font-size:13px">{escape(a.quartier)} · '
         f'{escape(a.categorie)}</span></p>'
         for a in annonces

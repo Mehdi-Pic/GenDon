@@ -3,7 +3,8 @@ from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
-from app import main, models
+from app import clerk, emails, main, models, outils, taches
+from app.routers import comptes
 
 from helpers import publier, uploader
 
@@ -17,7 +18,7 @@ def test_suppression_de_compte(client, utilisateur, services, db):
     utilisateur.uid = "u2"
     client.post("/conversations", json={"annonce_id": a["id"]})
 
-    main.purger_donnees_utilisateur(db, "u1")
+    comptes.purger_donnees_utilisateur(db, "u1")
 
     assert db.query(models.Annonce).count() == 0
     assert db.query(models.Conversation).count() == 0
@@ -33,7 +34,7 @@ def test_changement_de_pseudo(client, utilisateur, db):
     utilisateur.uid = "u2"
     client.post("/conversations", json={"annonce_id": a["id"]})
 
-    main._traiter_evenement_clerk({"type": "user.updated", "data": {"id": "u1", "username": "nouveau"}})
+    comptes._traiter_evenement_clerk({"type": "user.updated", "data": {"id": "u1", "username": "nouveau"}})
 
     db.expire_all()
     assert db.query(models.Annonce).one().pseudo == "nouveau"
@@ -53,7 +54,7 @@ def test_purge_annonces_expirees(client, services, db):
     url = uploader(client)[0]
     publier(client, images=[url])
     vieillir(db, 31)
-    main.purger_annonces_expirees()
+    taches.purger_annonces_expirees()
     assert db.query(models.Annonce).count() == 0
     assert services.images_detruites == ["gendon/img1"]
 
@@ -61,19 +62,19 @@ def test_purge_annonces_expirees(client, services, db):
 def test_annonce_recente_conservee(client, db):
     publier(client)
     vieillir(db, 10)
-    main.purger_annonces_expirees()
+    taches.purger_annonces_expirees()
     assert db.query(models.Annonce).count() == 1
 
 
 def test_taches_planifiees_a_heure_fixe():
     """Un « interval » repartait de zéro à chaque redéploiement : les tâches quotidiennes
     doivent être des cron à heure fixe."""
-    main.scheduler.remove_all_jobs()
+    taches.scheduler.remove_all_jobs()
     with TestClient(main.app):  # déclenche le démarrage (lifespan) qui enregistre les tâches
-        taches = {j.func.__name__: str(j.trigger) for j in main.scheduler.get_jobs()}
+        planifiees = {j.func.__name__: str(j.trigger) for j in taches.scheduler.get_jobs()}
     for nom in ("purger_annonces_expirees", "purger_images_orphelines", "envoyer_rappels_expiration",
                 "envoyer_newsletter_hebdo"):
-        assert taches[nom].startswith("cron"), (nom, taches[nom])
+        assert planifiees[nom].startswith("cron"), (nom, planifiees[nom])
 
 
 def test_newsletter_par_lots_de_100(client, services, monkeypatch):
@@ -83,8 +84,8 @@ def test_newsletter_par_lots_de_100(client, services, monkeypatch):
          "email_addresses": [{"id": "e", "email_address": f"u{i}@exemple.fr"}]}
         for i in range(250)
     ]
-    monkeypatch.setattr(main, "_tous_les_utilisateurs_clerk", lambda: comptes)
-    main.envoyer_newsletter_hebdo()
+    monkeypatch.setattr(clerk, "tous_les_utilisateurs", lambda: comptes)
+    taches.envoyer_newsletter_hebdo()
     assert [len(lot) for lot, _ in services.lots_newsletter] == [100, 100, 50]
 
 
@@ -94,9 +95,9 @@ def test_newsletter_respecte_les_desabonnements(client, services, monkeypatch, d
         {"id": uid, "primary_email_address_id": "e", "email_addresses": [{"id": "e", "email_address": f"{uid}@x.fr"}]}
         for uid in ("a", "b")
     ]
-    monkeypatch.setattr(main, "_tous_les_utilisateurs_clerk", lambda: comptes)
-    client.post("/newsletter/desabonnement", json={"token": main._token_desabonnement("a")})
-    main.envoyer_newsletter_hebdo()
+    monkeypatch.setattr(clerk, "tous_les_utilisateurs", lambda: comptes)
+    client.post("/newsletter/desabonnement", json={"token": emails.token_desabonnement("a")})
+    taches.envoyer_newsletter_hebdo()
     destinataires = [email["to"][0] for lot, _ in services.lots_newsletter for email in lot]
     assert destinataires == ["b@x.fr"]
 
@@ -114,14 +115,14 @@ def test_ip_client_non_falsifiable():
         "headers": [(b"x-forwarded-for", b"1.2.3.4, 203.0.113.9")],
         "client": ("1.2.3.4", 0),
     })
-    assert main.ip_client(requete) == "203.0.113.9"
+    assert outils.ip_client(requete) == "203.0.113.9"
 
 
 def test_nettoyage_du_rate_limit():
-    main.verifier_rate_limit("u1", "test", maximum=5, fenetre_secondes=1)
-    main._appels["test:u1"][0] -= main.FENETRE_MAX_SECONDES + 1
-    main.nettoyer_rate_limit()
-    assert "test:u1" not in main._appels
+    outils.verifier_rate_limit("u1", "test", maximum=5, fenetre_secondes=1)
+    outils._appels["test:u1"][0] -= outils.FENETRE_MAX_SECONDES + 1
+    outils.nettoyer_rate_limit()
+    assert "test:u1" not in outils._appels
 
 
 def test_admin_reserve_aux_moderateurs(client):
@@ -139,14 +140,14 @@ def test_preference_newsletter(client, services, monkeypatch):
     # Désabonné : il ne reçoit pas la lettre
     publier(client)
     compte = {"id": "u1", "primary_email_address_id": "e", "email_addresses": [{"id": "e", "email_address": "u1@x.fr"}]}
-    monkeypatch.setattr(main, "_tous_les_utilisateurs_clerk", lambda: [compte])
-    main.envoyer_newsletter_hebdo()
+    monkeypatch.setattr(clerk, "tous_les_utilisateurs", lambda: [compte])
+    taches.envoyer_newsletter_hebdo()
     assert services.lots_newsletter == []
 
     # Réabonné : il la reçoit de nouveau
     client.put("/newsletter/moi", json={"abonne": True})
     assert client.get("/newsletter/moi").json() == {"abonne": True}
-    main.envoyer_newsletter_hebdo()
+    taches.envoyer_newsletter_hebdo()
     assert len(services.lots_newsletter) == 1
 
 
@@ -166,7 +167,7 @@ def test_cors_autorise_put_depuis_le_site(client):
 def test_emails_reserves_aux_admins(client, utilisateur, db, monkeypatch):
     compte = {"id": "u9", "username": "bob", "primary_email_address_id": "e",
               "email_addresses": [{"id": "e", "email_address": "bob@x.fr"}]}
-    monkeypatch.setattr(main, "_tous_les_utilisateurs_clerk", lambda: [compte])
+    monkeypatch.setattr(clerk, "tous_les_utilisateurs", lambda: [compte])
 
     db.add(models.Role(clerk_user_id="u1", role="moderateur"))
     db.commit()
@@ -177,10 +178,10 @@ def test_emails_reserves_aux_admins(client, utilisateur, db, monkeypatch):
 
 
 def test_journal_purge_apres_un_an(db):
-    ancien = datetime.now(timezone.utc) - timedelta(days=main.DUREE_JOURNAL_MODERATION_JOURS + 1)
+    ancien = datetime.now(timezone.utc) - timedelta(days=taches.DUREE_JOURNAL_MODERATION_JOURS + 1)
     db.add(models.ActionModeration(clerk_user_id="m1", action="vieux", created_at=ancien))
     db.add(models.ActionModeration(clerk_user_id="m1", action="recent"))
     db.commit()
-    main.purger_journal_moderation()
+    taches.purger_journal_moderation()
     db.expire_all()
     assert [a.action for a in db.query(models.ActionModeration).all()] == ["recent"]

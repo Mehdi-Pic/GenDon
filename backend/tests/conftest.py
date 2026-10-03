@@ -19,10 +19,16 @@ os.environ["DATABASE_URL"] = url_test
 os.environ["NEWSLETTER_SECRET"] = "secret-de-test"
 os.environ.pop("CLERK_AUTHORIZED_PARTIES", None)
 
+import time  # noqa: E402
+
+import cloudinary.uploader  # noqa: E402
+import resend  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 
 import app.main as main  # noqa: E402
+from app import clerk, emails, outils  # noqa: E402
+from app.routers import contact  # noqa: E402
 from app import models  # noqa: E402
 from app.auth import get_current_user_id, get_user_id_optionnel  # noqa: E402
 from app.database import SessionLocal, engine  # noqa: E402
@@ -57,20 +63,20 @@ def base_vide():
     tables = ", ".join(t.name for t in models.Base.metadata.sorted_tables)
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
-    main._appels.clear()
-    main._cache_emails_equipe.update(emails=[], expire=0.0)
+    outils._appels.clear()
+    contact._cache_emails_equipe.update(emails=[], expire=0.0)
     yield
 
 
 @pytest.fixture
 def services(monkeypatch):
     faux = FauxServices()
-    monkeypatch.setattr(main.cloudinary.uploader, "upload", faux.upload)
-    monkeypatch.setattr(main.cloudinary.uploader, "destroy", faux.destroy)
-    monkeypatch.setattr(main, "_pseudo_clerk", lambda uid: f"pseudo-{uid}")
-    monkeypatch.setattr(main, "_notifier_nouveau_message", lambda *args: faux.notifications.append(args))
-    monkeypatch.setattr(main.resend.Batch, "send", lambda lot, options: faux.lots_newsletter.append((lot, options)))
-    monkeypatch.setattr(main.time, "sleep", lambda secondes: None)
+    monkeypatch.setattr(cloudinary.uploader, "upload", faux.upload)
+    monkeypatch.setattr(cloudinary.uploader, "destroy", faux.destroy)
+    monkeypatch.setattr(clerk, "pseudo_clerk", lambda uid: f"pseudo-{uid}")
+    monkeypatch.setattr(emails, "notifier_nouveau_message", lambda *args: faux.notifications.append(args))
+    monkeypatch.setattr(resend.Batch, "send", lambda lot, options: faux.lots_newsletter.append((lot, options)))
+    monkeypatch.setattr(time, "sleep", lambda secondes: None)
     return faux
 
 

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from PIL import Image
 
-from app import main, models
+from app import models, taches
 
 from helpers import IMAGE, annonce, image_jpeg, publier, uploader
 
@@ -72,7 +72,7 @@ def test_purge_des_photos_orphelines(client, services, db):
         {models.ImageUploadee.created_at: datetime.now(timezone.utc) - timedelta(days=5)}
     )
     db.commit()
-    main.purger_images_orphelines()
+    taches.purger_images_orphelines()
     assert services.images_detruites == ["gendon/img2"]
     restantes = {i.url for i in db.query(models.ImageUploadee).all()}
     assert restantes == {url_publiee}
@@ -80,7 +80,7 @@ def test_purge_des_photos_orphelines(client, services, db):
 
 def test_photo_recente_non_purgee(client, services):
     uploader(client)
-    main.purger_images_orphelines()
+    taches.purger_images_orphelines()
     assert services.images_detruites == []
 
 

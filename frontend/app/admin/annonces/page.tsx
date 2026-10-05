@@ -60,7 +60,9 @@ export default function AdminAnnonces() {
   return (
     <div>
       <h1 className="text-xl sm:text-2xl font-black text-gray-900 mb-1">Annonces</h1>
-      <p className="text-sm text-gray-400 mb-6">{total} annonce{total > 1 ? "s" : ""} en ligne</p>
+      <p className="text-sm text-gray-400 mb-6">
+        {total} annonce{total > 1 ? "s" : ""} en base (y compris celles masquées du public)
+      </p>
 
       <form
         onSubmit={(e) => { e.preventDefault(); setRequete({ page: 1, filtre: recherche.trim() }) }}
@@ -91,6 +93,20 @@ export default function AdminAnnonces() {
               )}
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-gray-900 truncate text-sm">{a.titre}</p>
+                {(a.donne_at || a.auteur_suspendu) && (
+                  <div className="flex flex-wrap gap-1 my-0.5">
+                    {a.donne_at && (
+                      <span className="text-[11px] font-medium bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">
+                        Donnée le {new Date(a.donne_at).toLocaleDateString("fr-FR")} · retrait sous 3 jours
+                      </span>
+                    )}
+                    {a.auteur_suspendu && (
+                      <span className="text-[11px] font-medium bg-red-50 text-red-600 px-2 py-0.5 rounded-full">
+                        Auteur suspendu · masquée
+                      </span>
+                    )}
+                  </div>
+                )}
                 <p className="text-xs text-gray-400 truncate">@{a.pseudo} · {a.quartier}</p>
                 <p className="text-xs text-gray-400 flex items-center gap-1.5">
                   {new Date(a.created_at).toLocaleDateString("fr-FR")}

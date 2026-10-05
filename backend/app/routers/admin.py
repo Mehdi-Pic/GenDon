@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from .. import clerk, models, roles, schemas
 from ..database import get_db
-from ..outils import enregistrer_suspension, filtre_recherche
+from ..outils import auteur_non_suspendu, enregistrer_suspension, filtre_recherche
 from ..photos import supprimer_images_cloudinary
 from ..roles import exiger_admin, exiger_moderateur, journaliser
 from . import contact
@@ -26,8 +26,15 @@ def admin_moi(acteur: dict = Depends(exiger_moderateur)):
 @router.get("/admin/stats")
 def admin_stats(db: Session = Depends(get_db), acteur: dict = Depends(exiger_moderateur)):
     il_y_a_7_jours = datetime.now(timezone.utc) - timedelta(days=7)
+    donnees = db.query(models.Annonce).filter(models.Annonce.donne_at != None)  # noqa: E711
     return {
-        "annonces": db.query(models.Annonce).count(),
+        # Même définition que /stats (page d'accueil) : non donnée et auteur non suspendu
+        "annonces": db.query(models.Annonce).filter(models.Annonce.donne_at == None, auteur_non_suspendu()).count(),  # noqa: E711
+        # Encore en base mais masquées du public : données (purgées après quelques jours) ou auteur suspendu
+        "annonces_donnees": donnees.count(),
+        "annonces_suspendues": db.query(models.Annonce).filter(
+            models.Annonce.donne_at == None, ~auteur_non_suspendu()  # noqa: E711
+        ).count(),
         "annonces_semaine": db.query(models.Annonce).filter(models.Annonce.created_at >= il_y_a_7_jours).count(),
         "vues_totales": db.query(func.coalesce(func.sum(models.Annonce.vues), 0)).scalar(),
         "favoris": db.query(models.Favori).count(),
@@ -52,6 +59,13 @@ def admin_lister_annonces(
     query = query.order_by(models.Annonce.created_at.desc(), models.Annonce.id.desc())
     total = query.count()
     annonces = query.offset((page - 1) * LIMITE_PAR_PAGE).limit(LIMITE_PAR_PAGE).all()
+    auteurs = {a.clerk_user_id for a in annonces if a.clerk_user_id}
+    suspendus = {
+        uid for (uid,) in db.query(models.CompteSuspendu.clerk_user_id)
+        .filter(models.CompteSuspendu.clerk_user_id.in_(auteurs)).all()
+    } if auteurs else set()
+    for a in annonces:
+        a.auteur_suspendu = a.clerk_user_id in suspendus
     return {"annonces": annonces, "total": total, "pages": ceil(total / LIMITE_PAR_PAGE) if total > 0 else 1, "page": page}
 
 

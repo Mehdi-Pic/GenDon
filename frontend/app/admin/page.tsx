@@ -7,6 +7,8 @@ import { ClipboardList, Eye, Heart, Flag, TrendingUp, HandHeart } from "lucide-r
 
 type Stats = {
   annonces: number
+  annonces_donnees: number
+  annonces_suspendues: number
   annonces_semaine: number
   vues_totales: number
   favoris: number
@@ -38,9 +40,23 @@ export default function AdminDashboard() {
     return () => { actif = false }
   }, [getToken])
 
-  const tuiles = stats
+  // Encore en base mais invisibles du public : expliquent l'écart avec le total de /admin/annonces
+  const masquees = stats
     ? [
-        { label: "Annonces en ligne", valeur: stats.annonces, Icon: ClipboardList, href: "/admin/annonces" },
+        stats.annonces_donnees > 0 && `${stats.annonces_donnees} donnée${stats.annonces_donnees > 1 ? "s" : ""}`,
+        stats.annonces_suspendues > 0 && `${stats.annonces_suspendues} auteur suspendu`,
+      ].filter(Boolean).join(", ")
+    : ""
+
+  const tuiles: { label: string; valeur: number; Icon: typeof Eye; href?: string; alerte?: boolean; detail?: string }[] = stats
+    ? [
+        {
+          label: "Annonces en ligne",
+          valeur: stats.annonces,
+          Icon: ClipboardList,
+          href: "/admin/annonces",
+          detail: masquees ? `+ masquées : ${masquees}` : undefined,
+        },
         { label: "Publiées cette semaine", valeur: stats.annonces_semaine, Icon: TrendingUp },
         { label: "Dons réalisés", valeur: stats.dons_realises, Icon: HandHeart },
         { label: "Vues cumulées", valeur: stats.vues_totales, Icon: Eye },
@@ -73,12 +89,13 @@ export default function AdminDashboard() {
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-          {tuiles.map(({ label, valeur, Icon, alerte, href }) => {
+          {tuiles.map(({ label, valeur, Icon, alerte, href, detail }) => {
             const contenu = (
               <>
                 <Icon className={`w-5 h-5 mb-2 sm:mb-3 ${alerte ? "text-red-500" : "text-green-600"}`} />
                 <p className={`text-2xl sm:text-3xl font-black ${alerte ? "text-red-600" : "text-gray-900"}`}>{valeur}</p>
                 <p className="text-xs sm:text-sm text-gray-500 mt-1 leading-tight">{label}</p>
+                {detail && <p className="text-[11px] text-gray-400 mt-1 leading-tight">{detail}</p>}
               </>
             )
             const style = `block rounded-3xl p-4 sm:p-5 ring-1 transition-all ${

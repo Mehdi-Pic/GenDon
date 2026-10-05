@@ -27,6 +27,8 @@ export type Annonce = {
   // Réservés au propriétaire (Mes annonces)
   nb_interesses?: number | null
   reserve_pour_pseudo?: string | null
+  // Panel d'administration : l'annonce est masquée du public tant que le compte est suspendu
+  auteur_suspendu?: boolean | null
 }
 
 const UN_JOUR = 86400000

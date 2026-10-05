@@ -322,3 +322,28 @@ def test_journal_affiche_les_pseudos(client, utilisateur, db, monkeypatch):
     utilisateur.uid = "admin1"
     client.get(f"/admin/conversations/{cid}")
     assert client.get("/admin/journal").json()[0]["par"] == "pseudo-admin1"
+
+
+def test_admin_distingue_annonces_masquees(client, utilisateur, db, monkeypatch):
+    """Le tableau de bord compte comme la page d'accueil et explique l'écart avec la liste admin."""
+    from app import clerk
+    monkeypatch.setattr(clerk, "suspendre", lambda uid, suspendu: True)
+    publier(client)
+    donnee = publier(client)
+    db.query(models.Annonce).filter_by(id=donnee["id"]).update({"donne_at": datetime.now(timezone.utc)})
+    db.commit()
+    utilisateur.uid = "u2"
+    publier(client)
+    db.add(models.Role(clerk_user_id="modo", role="moderateur"))
+    db.commit()
+    utilisateur.uid = "modo"
+    client.post("/admin/utilisateurs/u2/suspendre", json={"suspendu": True})
+
+    stats = client.get("/admin/stats").json()
+    assert (stats["annonces"], stats["annonces_donnees"], stats["annonces_suspendues"]) == (1, 1, 1)
+    assert stats["annonces"] == client.get("/stats").json()["annonces"]
+    liste = client.get("/admin/annonces").json()
+    assert liste["total"] == 3
+    assert sorted((a["donne_at"] is not None, a["auteur_suspendu"]) for a in liste["annonces"]) == [
+        (False, False), (False, True), (True, False)
+    ]

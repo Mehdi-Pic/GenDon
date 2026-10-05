@@ -69,6 +69,8 @@ class AnnonceResponse(BaseModel):
     # Réservées au propriétaire (Mes annonces)
     nb_interesses: Optional[int] = None
     reserve_pour_pseudo: Optional[str] = None
+    # Réservé au panel d'administration
+    auteur_suspendu: Optional[bool] = None
 
     class Config:
         from_attributes = True

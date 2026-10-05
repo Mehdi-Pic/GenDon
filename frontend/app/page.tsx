@@ -12,6 +12,8 @@ export const revalidate = 60
 // null = source injoignable : on affiche « – » plutôt qu'un 0 trompeur
 type Accueil = { annonces: Annonce[] | null; disponibles: number | null; dons: number | null }
 
+const DELAI_API_MS = 10_000
+
 async function getAccueil(): Promise<Accueil> {
   const base = process.env.NEXT_PUBLIC_API_URL
   let annonces: Annonce[] | null = null
@@ -19,10 +21,12 @@ async function getAccueil(): Promise<Accueil> {
   let dons: number | null = null
 
   // Les deux sources sont interrogees separement : la panne de l'une
-  // ne doit pas vider l'autre.
+  // ne doit pas vider l'autre. Le delai borne l'attente : sans lui, une API qui ne
+  // repond pas bloque le pre-rendu de la page et fait echouer tout le build Vercel
+  // (limite de 60 s par page). La page affiche alors « – » et se regenere sous 60 s.
   const [resListe, resStats] = await Promise.allSettled([
-    fetch(`${base}/annonces`, { next: { revalidate: 60 } }),
-    fetch(`${base}/stats`, { next: { revalidate: 60 } }),
+    fetch(`${base}/annonces`, { next: { revalidate: 60 }, signal: AbortSignal.timeout(DELAI_API_MS) }),
+    fetch(`${base}/stats`, { next: { revalidate: 60 }, signal: AbortSignal.timeout(DELAI_API_MS) }),
   ])
 
   try {

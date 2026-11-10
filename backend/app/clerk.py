@@ -1,8 +1,11 @@
 """Accès à l'API Clerk (comptes utilisateurs). Les autres modules appellent ces fonctions
 via le module (clerk.pseudo_clerk(...)) : les tests peuvent ainsi les remplacer."""
+import logging
 import os
 
 import httpx
+
+log = logging.getLogger(__name__)
 
 API_CLERK = "https://api.clerk.com/v1"
 MAX_UTILISATEURS_CLERK = 20000  # garde-fou contre une boucle infinie
@@ -27,8 +30,10 @@ def utilisateur(user_id: str):
         r = httpx.get(f"{API_CLERK}/users/{user_id}", headers=_entetes(), timeout=10)
         if r.is_success:
             return r.json()
+        if r.status_code != 404:
+            log.warning("Clerk : lecture du compte %s refusée (HTTP %s)", user_id, r.status_code)
     except Exception:
-        pass
+        log.exception("Clerk injoignable (lecture du compte %s)", user_id)
     return None
 
 
@@ -54,8 +59,10 @@ def tous_les_utilisateurs(ordre: str = "-created_at") -> list:
                 timeout=15,
             )
         except Exception:
+            log.exception("Clerk injoignable (liste des comptes, offset %s)", offset)
             break
         if not r.is_success:
+            log.error("Clerk : liste des comptes refusée (HTTP %s, offset %s)", r.status_code, offset)
             break
         lot = r.json()
         utilisateurs.extend(lot)
@@ -71,6 +78,9 @@ def suspendre(user_id: str, suspendu: bool) -> bool:
     action = "ban" if suspendu else "unban"
     try:
         r = httpx.post(f"{API_CLERK}/users/{user_id}/{action}", headers=_entetes(), timeout=10)
+        if not r.is_success:
+            log.error("Clerk : %s de %s refusé (HTTP %s)", action, user_id, r.status_code)
         return r.is_success
     except Exception:
+        log.exception("Clerk injoignable (%s de %s)", action, user_id)
         return False

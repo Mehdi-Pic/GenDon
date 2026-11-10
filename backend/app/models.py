@@ -13,8 +13,8 @@ class Annonce(Base):
     pseudo = Column(String(50), nullable=False)
     images = Column(ARRAY(String), nullable=True, default=[])
     statut = Column(String(20), nullable=False, default="publiee")
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    clerk_user_id = Column(String(100), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    clerk_user_id = Column(String(100), nullable=True, index=True)
     vues = Column(Integer, nullable=False, default=0, server_default="0")
     rappel_envoye = Column(Boolean, nullable=False, default=False, server_default="false")
     # Rempli quand le proprietaire declare l'objet donne : l'annonce est alors retiree du site sous 3 jours
@@ -80,7 +80,7 @@ class Conversation(Base):
     id = Column(Integer, primary_key=True, index=True)
     # SET NULL : la conversation survit au retrait de l'annonce (purge, suppression, don),
     # le temps de finaliser la remise. Elle est purgée ensuite après inactivité.
-    annonce_id = Column(Integer, ForeignKey("annonces.id", ondelete="SET NULL"), nullable=True)
+    annonce_id = Column(Integer, ForeignKey("annonces.id", ondelete="SET NULL"), nullable=True, index=True)
     # Titre copié à la création (et tenu à jour) : reste affiché une fois l'annonce retirée
     annonce_titre = Column(String(100), nullable=False, default="", server_default="")
     donneur_id = Column(String(100), nullable=False, index=True)

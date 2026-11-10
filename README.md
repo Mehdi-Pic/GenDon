@@ -38,3 +38,22 @@ Le site est entièrement gratuit, sans publicité, et pensé d'abord pour le mob
 ```
 Navigateur ─▶ Site Next.js ─▶ API FastAPI ─▶ PostgreSQL
 ```
+
+## Développement local
+
+API (Python 3.13, PostgreSQL) :
+
+```bash
+cd backend
+cp .env.example .env          # puis renseigner les clés
+pip install -r requirements-dev.txt
+uvicorn app.main:app --reload # http://localhost:8000, migrations appliquées au démarrage
+```
+
+Tests, sur une base dédiée qu'ils vident à chaque test (jamais la production) :
+
+```bash
+TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gendon_test pytest -q
+```
+
+Site : voir [frontend/README.md](frontend/README.md).

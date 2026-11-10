@@ -1,4 +1,5 @@
 """Formulaire de contact : écrit à l'équipe (admins + modérateurs)."""
+import logging
 import os
 import re
 import time
@@ -14,6 +15,8 @@ from .. import clerk, models, roles
 from ..auth import get_user_id_optionnel
 from ..database import get_db
 from ..outils import ip_client, limite_atteinte, verifier_rate_limit
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -66,6 +69,7 @@ def _emails_equipe(db: Session) -> list:
                 if adresse:
                     emails.append(adresse)
         except Exception:
+            log.exception("Clerk injoignable (email du membre %s)", uid)
             continue
     if adresse_site:
         emails.insert(0, adresse_site)
@@ -129,5 +133,6 @@ def contacter_equipe(
             """,
         })
     except Exception:
+        log.exception("Envoi du formulaire de contact impossible")
         raise HTTPException(status_code=500, detail="L'envoi du message a échoué")
     return {"ok": True}

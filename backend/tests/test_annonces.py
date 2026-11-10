@@ -109,3 +109,27 @@ def test_signalement_idempotent(client, utilisateur, db):
 def test_stats_publiques(client):
     publier(client)
     assert client.get("/stats").json() == {"annonces": 1, "dons_realises": 0}
+
+
+def test_publications_limitees_par_jour(client):
+    from app.routers.annonces import MAX_PUBLICATIONS_PAR_JOUR
+    for i in range(MAX_PUBLICATIONS_PAR_JOUR):
+        assert client.post("/annonces", json=annonce(titre=f"Objet {i}")).status_code == 200
+    reponse = client.post("/annonces", json=annonce(titre="Un de trop"))
+    assert reponse.status_code == 429 and "par jour" in reponse.json()["detail"]
+
+
+def test_publication_refusee_ne_consomme_pas_le_quota(client):
+    from app.routers.annonces import MAX_PUBLICATIONS_PAR_JOUR
+    for _ in range(MAX_PUBLICATIONS_PAR_JOUR + 2):
+        assert client.post("/annonces", json=annonce(images=["https://exemple.test/x.jpg"])).status_code == 400
+    assert client.post("/annonces", json=annonce()).status_code == 200
+
+
+def test_plafond_d_annonces_en_ligne(client, db, monkeypatch):
+    from app.routers import annonces as routes
+    monkeypatch.setattr(routes, "MAX_ANNONCES_EN_LIGNE", 2)
+    publier(client)
+    publier(client)
+    reponse = client.post("/annonces", json=annonce())
+    assert reponse.status_code == 400 and "en ligne" in reponse.json()["detail"]

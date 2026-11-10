@@ -1,12 +1,15 @@
 """Envoi d'emails (Resend) : gabarit commun, liens signés de désabonnement, notifications."""
 import hashlib
 import hmac
+import logging
 import os
 from html import escape
 
 import resend
 
 from . import clerk
+
+log = logging.getLogger(__name__)
 
 PIED_DE_PAGE = "GenDon · Dons gratuits entre habitants de Gennevilliers"
 
@@ -101,4 +104,4 @@ def notifier_nouveau_message(destinataire_id: str, expediteur_pseudo: str, annon
             gabarit("Vous avez un nouveau message", corps, pied),
         )
     except Exception:
-        pass
+        log.exception("Email « nouveau message » non envoyé (conversation %s)", conversation_id)

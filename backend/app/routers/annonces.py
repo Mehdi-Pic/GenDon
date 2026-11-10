@@ -13,7 +13,7 @@ from ..auth import get_current_user_id, get_user_id_optionnel
 from ..database import get_db
 from ..outils import auteur_non_suspendu, filtre_recherche, ip_client, limite_atteinte, verifier_rate_limit
 from ..photos import supprimer_images_cloudinary, valider_images
-from .messagerie import informer_les_demandeurs, liberer_reservation, message_systeme
+from .messagerie import conversation_entamee, informer_les_demandeurs, liberer_reservation, message_systeme
 
 router = APIRouter()
 
@@ -23,6 +23,11 @@ def verifier_proprietaire(annonce: models.Annonce, user_id: str) -> None:
         raise HTTPException(status_code=403, detail="Vous n'êtes pas le propriétaire de cette annonce")
 
 
+# Un seul compte ne doit pas pouvoir noyer le listing (ni déclencher des rafales d'alertes)
+MAX_PUBLICATIONS_PAR_JOUR = 10
+MAX_ANNONCES_EN_LIGNE = 30
+
+
 @router.post("/annonces", response_model=schemas.AnnonceResponse)
 def créer_annonce(
     annonce: schemas.AnnonceCreate,
@@ -30,7 +35,23 @@ def créer_annonce(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
+    en_ligne = (
+        db.query(models.Annonce)
+        .filter(models.Annonce.clerk_user_id == user_id, models.Annonce.donne_at == None)  # noqa: E711
+        .count()
+    )
+    if en_ligne >= MAX_ANNONCES_EN_LIGNE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Vous avez déjà {MAX_ANNONCES_EN_LIGNE} annonces en ligne : clôturez-en une avant d'en publier une autre",
+        )
     valider_images(db, user_id, annonce.images)
+    # Compté en dernier : une publication refusée (photo invalide, plafond) n'entame pas le quota
+    if limite_atteinte(user_id, "publication", MAX_PUBLICATIONS_PAR_JOUR, 24 * 3600):
+        raise HTTPException(
+            status_code=429,
+            detail=f"Maximum {MAX_PUBLICATIONS_PAR_JOUR} annonces par jour : réessayez demain",
+        )
     db_annonce = models.Annonce(
         **annonce.model_dump(),
         pseudo=clerk.pseudo_clerk(user_id),
@@ -117,15 +138,18 @@ def get_mes_annonces(
     if not annonces:
         return []
     ids = [a.id for a in annonces]
-    # Personnes intéressées : conversations encore ouvertes côté demandeur
+    # Personnes intéressées : conversations encore ouvertes côté demandeur, où quelqu'un a écrit
     convs = (
-        db.query(models.Conversation.annonce_id, models.Conversation.demandeur_id, models.Conversation.demandeur_pseudo)
+        db.query(
+            models.Conversation.annonce_id, models.Conversation.demandeur_id, models.Conversation.demandeur_pseudo,
+            conversation_entamee().label("entamee"),
+        )
         .filter(models.Conversation.annonce_id.in_(ids), models.Conversation.demandeur_actif == True)
         .all()
     )
     for a in annonces:
         a.est_proprietaire = True
-        a.nb_interesses = sum(1 for c in convs if c.annonce_id == a.id)
+        a.nb_interesses = sum(1 for c in convs if c.annonce_id == a.id and c.entamee)
         if a.reserve_pour:
             a.reserve_pour_pseudo = next(
                 (c.demandeur_pseudo for c in convs if c.annonce_id == a.id and c.demandeur_id == a.reserve_pour),
@@ -170,6 +194,7 @@ def modifier_annonce(
     verifier_proprietaire(annonce, user_id)
     if annonce.donne_at:
         raise HTTPException(status_code=400, detail="Cette annonce est cloturee")
+    verifier_rate_limit(user_id, "modification", maximum=30, fenetre_secondes=3600)
     valider_images(db, user_id, data.images, deja_presentes=annonce.images or [])
     images_supprimees = set(annonce.images or []) - set(data.images or [])
     for key, value in data.model_dump().items():

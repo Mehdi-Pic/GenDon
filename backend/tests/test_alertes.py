@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 import resend
 
-from app import models, taches
+from app import clerk, models, taches
 
 from helpers import publier
 
@@ -102,3 +102,22 @@ def test_suppression_de_compte_efface_les_alertes(client, db):
     comptes.purger_donnees_utilisateur(db, "u1")
     assert db.query(models.Alerte).count() == 0
     assert db.query(models.DesabonnementMessages).count() == 0
+
+
+def test_alerte_conservee_si_clerk_injoignable(client, utilisateur, db, monkeypatch):
+    """Sans adresse email (Clerk en panne), les dons ne sont pas marqués comme signalés : ils repartiront."""
+    monkeypatch.setattr(taches, "alertes_autorisees", lambda: True)
+    envois = []
+    monkeypatch.setattr(taches, "_email_alertes", lambda email, annonces, criteres: envois.append(email))
+    utilisateur.uid = "u2"
+    client.post("/alertes", json={"categorie": "Mobilier"})
+    db.query(models.Alerte).update({models.Alerte.verifie_jusqu_a: models.Alerte.verifie_jusqu_a - timedelta(minutes=1)})
+    db.commit()
+    utilisateur.uid = "u1"
+    publier(client)
+    monkeypatch.setattr(clerk, "email_utilisateur", lambda uid: None)
+    taches.envoyer_alertes()
+    assert envois == []
+    monkeypatch.setattr(clerk, "email_utilisateur", lambda uid: "u2@exemple.test")
+    taches.envoyer_alertes()
+    assert envois == ["u2@exemple.test"]

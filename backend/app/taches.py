@@ -1,4 +1,5 @@
 """Tâches planifiées : purges, rappels d'expiration, newsletter, alertes de recherche."""
+import logging
 import os
 import time
 from datetime import datetime, timedelta, timezone
@@ -16,6 +17,9 @@ from . import clerk, emails, models
 from .database import SessionLocal
 from .outils import auteur_non_suspendu, filtre_recherche, nettoyer_rate_limit
 from .photos import supprimer_images_cloudinary
+from .routers.messagerie import conversation_entamee
+
+log = logging.getLogger(__name__)
 
 
 # Une annonce declaree donnee reste visible pour son proprietaire quelques jours, puis disparait
@@ -43,8 +47,10 @@ def purger_annonces_expirees():
                 db.commit()
                 supprimer_images_cloudinary(images)
             except Exception:
+                log.exception("Purge : annonce %s non supprimée", annonce.id)
                 db.rollback()
     except Exception:
+        log.exception("Purge des annonces expirées en échec")
         db.rollback()
     finally:
         db.close()
@@ -71,6 +77,7 @@ def purger_images_orphelines():
                 db.commit()
                 supprimer_images_cloudinary([image.url])
             except Exception:
+                log.exception("Purge : image orpheline %s non supprimée", image.url)
                 db.rollback()
     finally:
         db.close()
@@ -87,6 +94,7 @@ def purger_journal_moderation():
         db.query(models.ActionModeration).filter(models.ActionModeration.created_at < limite).delete()
         db.commit()
     except Exception:
+        log.exception("Purge du journal de modération en échec")
         db.rollback()
     finally:
         db.close()
@@ -104,6 +112,7 @@ def envoyer_rappels_expiration():
                 models.Annonce.created_at < limite,
                 models.Annonce.rappel_envoye == False,
                 models.Annonce.donne_at == None,
+                auteur_non_suspendu(),
             )
             .all()
         )
@@ -151,6 +160,7 @@ def envoyer_rappels_expiration():
                 annonce.rappel_envoye = True
                 db.commit()
             except Exception:
+                log.exception("Rappel d'expiration non envoyé (annonce %s)", annonce.id)
                 db.rollback()
     finally:
         db.close()
@@ -175,6 +185,8 @@ def envoyer_newsletter_hebdo():
             return  # impossible de générer des liens de désabonnement valides
 
         desabonnes = {d.clerk_user_id for d in db.query(models.DesabonnementNewsletter).all()}
+        # Comptes suspendus : plus d'email du site
+        desabonnes |= {s.clerk_user_id for s in db.query(models.CompteSuspendu).all()}
         utilisateurs = clerk.tous_les_utilisateurs()
         if not utilisateurs:
             return
@@ -269,10 +281,12 @@ def envoyer_newsletter_hebdo():
                     )
                     break
                 except Exception:
+                    if tentative == 2:
+                        log.exception("Newsletter : lot %s (%s destinataires) perdu après 3 essais", i, len(lot))
                     time.sleep(2 * (tentative + 1))
             time.sleep(1)
     except Exception:
-        pass
+        log.exception("Newsletter hebdomadaire en échec")
     finally:
         db.close()
 
@@ -280,6 +294,8 @@ def envoyer_newsletter_hebdo():
 # Conversation dont l'annonce n'existe plus : conservée ce délai après le dernier message,
 # le temps de finaliser la remise de l'objet
 DELAI_CONVERSATION_SANS_ANNONCE_JOURS = 30
+# Conversation ouverte d'un clic sur « Contacter » mais où personne n'a jamais écrit
+DELAI_CONVERSATION_VIDE_HEURES = 24
 
 
 def purger_conversations():
@@ -289,17 +305,20 @@ def purger_conversations():
     db = SessionLocal()
     try:
         limite = datetime.now(timezone.utc) - timedelta(days=DELAI_CONVERSATION_SANS_ANNONCE_JOURS)
+        limite_vide = datetime.now(timezone.utc) - timedelta(hours=DELAI_CONVERSATION_VIDE_HEURES)
         en_attente = (
             db.query(models.Signalement.conversation_id)
             .filter(models.Signalement.conversation_id != None, models.Signalement.traite == False)
         )
         db.query(models.Conversation).filter(
             ((models.Conversation.annonce_id == None) & (models.Conversation.dernier_message_at < limite))
-            | ((models.Conversation.donneur_actif == False) & (models.Conversation.demandeur_actif == False)),
+            | ((models.Conversation.donneur_actif == False) & (models.Conversation.demandeur_actif == False))
+            | ((models.Conversation.created_at < limite_vide) & ~conversation_entamee()),
             ~models.Conversation.id.in_(en_attente),
         ).delete(synchronize_session=False)
         db.commit()
     except Exception:
+        log.exception("Purge des conversations en échec")
         db.rollback()
     finally:
         db.close()
@@ -398,9 +417,12 @@ def traiter_alertes_utilisateur(db, uid: str) -> None:
     envoye = False
     if trouvees:
         email = clerk.email_utilisateur(uid)
-        if email:
-            _email_alertes(email, list(trouvees.values())[:MAX_ANNONCES_PAR_EMAIL_ALERTE], criteres)
-            envoye = True
+        if not email:
+            # Clerk injoignable (ou compte sans email) : on n'avance pas, ces dons repartiront à l'heure suivante
+            db.commit()
+            return
+        _email_alertes(email, list(trouvees.values())[:MAX_ANNONCES_PAR_EMAIL_ALERTE], criteres)
+        envoye = True
     for alerte in alertes:
         alerte.verifie_jusqu_a = maintenant
         if envoye:
@@ -431,6 +453,7 @@ def alerter_nouvelle_annonce(annonce_id: int) -> None:
                 try:
                     traiter_alertes_utilisateur(db, uid)
                 except Exception:
+                    log.exception("Alerte immédiate non traitée (utilisateur %s)", uid)
                     db.rollback()
     finally:
         db.close()
@@ -446,6 +469,7 @@ def envoyer_alertes():
             try:
                 traiter_alertes_utilisateur(db, uid)
             except Exception:
+                log.exception("Alertes non traitées (utilisateur %s)", uid)
                 db.rollback()
     finally:
         db.close()

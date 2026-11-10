@@ -85,7 +85,13 @@ export default function AdminSignalements() {
                   <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold">À traiter</span>
                 )}
                 {s.type === "conversation" ? (
-                  s.conversation_id ? (
+                  s.conversation_id && s.traite ? (
+                    // Une fois le signalement traité, l'équipe ne peut plus relire la conversation
+                    <span className="font-bold text-sm text-gray-500 inline-flex items-center gap-1">
+                      <MessageCircle className="w-3.5 h-3.5 text-gray-400" />
+                      Conversation · {s.conversation_titre || "annonce retirée"}
+                    </span>
+                  ) : s.conversation_id ? (
                     <Link href={`/admin/conversations/${s.conversation_id}`} className="font-bold text-sm text-gray-900 hover:underline inline-flex items-center gap-1">
                       <MessageCircle className="w-3.5 h-3.5 text-gray-400" />
                       Conversation · {s.conversation_titre || "annonce retirée"}

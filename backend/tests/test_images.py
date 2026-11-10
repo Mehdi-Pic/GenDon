@@ -136,3 +136,14 @@ def test_fichier_qui_n_est_pas_une_image_refuse(client, services):
     reponse = client.post("/upload", files=[("files", ("faux.jpg", b"pas une image", "image/jpeg"))])
     assert reponse.status_code == 400
     assert services.contenus_envoyes == []
+
+
+def test_image_aux_dimensions_demesurees_refusee(client):
+    """Quelques Ko sur disque, mais des centaines de millions de pixels une fois décodée."""
+    import io
+    from PIL import Image
+    sortie = io.BytesIO()
+    Image.new("1", (20000, 20000)).save(sortie, format="PNG", optimize=True)
+    fichiers = [("files", ("bombe.png", sortie.getvalue(), "image/png"))]
+    reponse = client.post("/upload", files=fichiers)
+    assert reponse.status_code == 400

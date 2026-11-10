@@ -2,6 +2,26 @@
 
 Date : 10 novembre 2026. Périmètre : dépôt à l'état du commit `d2a6a4d` (backend FastAPI, frontend Next.js, CI).
 
+## Suivi des corrections
+
+Toutes les corrections ont été faites dans la foulée de l'audit. 111 tests backend verts (90 avant), `alembic check`, `tsc`, `eslint` et `npm run build` propres, `npm audit` et `pip-audit` sans faille.
+
+| Point | État |
+|---|---|
+| 1. Dépendances | Corrigé : Next 16.4.6, Pillow 13.0.0, PyJWT 2.15.1, cryptography 50.0.2, `npm audit fix`. Dependabot activé (`.github/dependabot.yml`). |
+| 2. Journalisation | Corrigé : `logging` configuré dans `main.py`, chaque erreur avalée est journalisée (visible dans les journaux Railway). |
+| 3. Recontact | Corrigé : le demandeur qui avait quitté revient dans sa conversation (message « X est revenu ») ; si c'est le donneur qui est parti, erreur explicite. |
+| 4. Limites de débit | Corrigé : 10 publications par jour, 30 annonces en ligne par compte, 30 modifications et 30 nouvelles conversations par heure. |
+| 5. Cache des clés Clerk | Corrigé : une réponse d'erreur n'est plus mise en cache ; un rechargement raté garde les clés connues. |
+| 6. Conversations vides | Corrigé : invisibles côté donneur et non comptées comme intéressés tant que personne n'a écrit, purgées après 24 h. |
+| 7. Tests de `auth.py` | Corrigé : `tests/test_auth.py` (jeton valide, expiré, mauvaise clé, non signé, `azp`, rotation, erreurs Clerk, webhook signé ou non). Pas de test frontend ajouté. |
+
+Mineurs corrigés : alertes conservées si Clerk ne répond pas ; images limitées à 40 millions de pixels et GIF à 200 trames ; lecture d'une conversation par l'équipe limitée aux signalements en attente (lien masqué dans l'admin après traitement) ; comptes suspendus exclus de la newsletter et des rappels ; pastille de messages en pause quand l'onglet est masqué ; message de désabonnement sans « expiré » ; index ajoutés (migration `0005`) ; `.env.example`, README frontend et procédure locale ; `middleware.ts` renommé en `proxy.ts` (convention de Next 16).
+
+Mineurs laissés en l'état, à décider : renouvellement qui réécrit la date de publication (demande une colonne `expire_at` et une migration de données) ; signalement effacé avec l'annonce ; suspendu encore joignable par ses interlocuteurs ; liste admin rechargeant tous les comptes Clerk ; `List-Unsubscribe-Post` (demande un point d'entrée dédié) ; `Content-Security-Policy` (à régler avec Clerk et Vercel Analytics, risque de casser la connexion) ; duplication des gabarits d'email ; tâches planifiées en mémoire ; licence (choix du propriétaire).
+
+Les cinq points « À vérifier en production » restent à vérifier.
+
 ## Verdict
 
 Le projet est sain. Aucun problème BLOQUANT trouvé : pas de faille d'accès aux données d'autrui, pas d'injection, pas de secret dans le dépôt. Le contrôle d'accès est fait partout côté serveur et il est correct.

@@ -210,7 +210,7 @@ def desabonner_newsletter(data: DesabonnementRequete, db: Session = Depends(get_
         raise HTTPException(status_code=503, detail="Désabonnement momentanément indisponible")
     uid = emails.verifier_token_desabonnement(data.token)
     if not uid:
-        raise HTTPException(status_code=400, detail="Lien de désabonnement invalide ou expiré")
+        raise HTTPException(status_code=400, detail="Lien de désabonnement invalide")
     existe = (
         db.query(models.DesabonnementNewsletter)
         .filter(models.DesabonnementNewsletter.clerk_user_id == uid)

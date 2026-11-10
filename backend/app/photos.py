@@ -1,5 +1,6 @@
 """Photos des annonces : nettoyage des métadonnées, envoi à Cloudinary, contrôle de propriété."""
 import io
+import logging
 import os
 from typing import List
 
@@ -13,6 +14,8 @@ from . import models
 from .auth import get_current_user_id
 from .database import get_db
 from .outils import verifier_rate_limit
+
+log = logging.getLogger(__name__)
 
 cloudinary.config(
     cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
@@ -42,7 +45,8 @@ def supprimer_images_cloudinary(urls: list) -> None:
             try:
                 cloudinary.uploader.destroy(public_id)
             except Exception:
-                pass  # image déjà absente ou Cloudinary indisponible : on ne bloque pas le reste
+                # Cloudinary indisponible : on ne bloque pas le reste, mais la photo reste en ligne
+                log.exception("Suppression Cloudinary impossible : %s", public_id)
 
 
 def valider_images(db: Session, user_id: str, images: list, deja_presentes: list = ()) -> None:
@@ -61,6 +65,11 @@ def valider_images(db: Session, user_id: str, images: list, deja_presentes: list
         raise HTTPException(status_code=400, detail="Image invalide : envoyez vos photos depuis le formulaire")
 
 
+# Une image de quelques Mo peut annoncer des centaines de millions de pixels et saturer la mémoire
+# au décodage (la limite par défaut de Pillow est d'environ 178 millions). 40 millions = 8000 x 5000.
+Image.MAX_IMAGE_PIXELS = 40_000_000
+MAX_TRAMES_GIF = 200
+
 TYPES_IMAGE_AUTORISES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 FORMATS_IMAGE_AUTORISES = {"JPEG", "PNG", "WEBP", "GIF"}
 
@@ -74,10 +83,15 @@ def nettoyer_metadonnees(contenu: bytes) -> bytes:
             format_image = image.format
             if format_image not in FORMATS_IMAGE_AUTORISES:
                 raise HTTPException(status_code=400, detail="Format d'image non pris en charge")
+            # Dimensions lues dans l'en-tête, avant tout décodage
+            if image.width * image.height > Image.MAX_IMAGE_PIXELS:
+                raise HTTPException(status_code=400, detail="Image trop grande (dimensions)")
             sortie = io.BytesIO()
             # Le profil de couleur n'est pas une donnée personnelle : on le garde pour ne pas ternir les photos
             profil = image.info.get("icc_profile")
             if format_image == "GIF":
+                if getattr(image, "n_frames", 1) > MAX_TRAMES_GIF:
+                    raise HTTPException(status_code=400, detail="GIF trop long")
                 images = [trame.copy() for trame in ImageSequence.Iterator(image)]
                 for trame in images:
                     trame.info.pop("comment", None)

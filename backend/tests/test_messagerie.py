@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
-from app import models, taches
+from app import models, outils, taches
+from app.routers import messagerie
 
 from helpers import publier
 
@@ -153,8 +154,11 @@ def test_conversation_signalee_gardee_pour_l_equipe(client, utilisateur, db):
 
 def test_reserver_previent_les_autres(client, utilisateur):
     a, cid = conversation(client, utilisateur)
+    client.post(f"/conversations/{cid}/messages", json={"contenu": "Intéressé"})
     utilisateur.uid = "u3"
     cid3 = client.post("/conversations", json={"annonce_id": a["id"]}).json()["id"]
+    client.post(f"/conversations/{cid3}/messages", json={"contenu": "Moi aussi"})
+    client.post(f"/conversations/{cid3}/lu")
 
     utilisateur.uid = "u1"
     reponse = client.post(f"/annonces/{a['id']}/reserver", json={"conversation_id": cid})
@@ -347,3 +351,87 @@ def test_admin_distingue_annonces_masquees(client, utilisateur, db, monkeypatch)
     assert sorted((a["donne_at"] is not None, a["auteur_suspendu"]) for a in liste["annonces"]) == [
         (False, False), (False, True), (True, False)
     ]
+
+
+# ---------- Reprise de contact et conversations vides ----------
+
+def test_recontacter_apres_avoir_quitte(client, utilisateur):
+    a, cid = conversation(client, utilisateur)
+    client.post(f"/conversations/{cid}/messages", json={"contenu": "Bonjour"})
+    client.delete(f"/conversations/{cid}")
+    # Nouveau clic sur « Contacter » : on revient dans la même conversation, lisible et utilisable
+    reponse = client.post("/conversations", json={"annonce_id": a["id"]})
+    assert reponse.json()["id"] == cid
+    fil = client.get(f"/conversations/{cid}/messages")
+    assert fil.status_code == 200
+    assert fil.json()["messages"][-1]["contenu"] == "pseudo-u2 est revenu dans la conversation"
+    assert client.post(f"/conversations/{cid}/messages", json={"contenu": "Re"}).status_code == 200
+
+
+def test_recontacter_quand_le_donneur_a_quitte(client, utilisateur, db):
+    a, cid = conversation(client, utilisateur)
+    client.post(f"/conversations/{cid}/messages", json={"contenu": "Bonjour"})
+    # Signalement en attente : la conversation survit au départ des deux participants
+    client.post(f"/conversations/{cid}/signaler", json={"raison": "Propos déplacés"})
+    client.delete(f"/conversations/{cid}")
+    utilisateur.uid = "u1"
+    client.delete(f"/conversations/{cid}")
+    utilisateur.uid = "u2"
+    reponse = client.post("/conversations", json={"annonce_id": a["id"]})
+    assert reponse.status_code == 400 and "quitté" in reponse.json()["detail"]
+
+
+def test_conversation_vide_invisible_pour_le_donneur(client, utilisateur):
+    a, cid = conversation(client, utilisateur)
+    # Le demandeur la voit (il l'a ouverte), pas le donneur tant que rien n'est écrit
+    assert [c["id"] for c in client.get("/conversations").json()] == [cid]
+    utilisateur.uid = "u1"
+    assert client.get("/conversations").json() == []
+    assert client.get("/annonces/me").json()[0]["nb_interesses"] == 0
+
+    utilisateur.uid = "u2"
+    client.post(f"/conversations/{cid}/messages", json={"contenu": "Bonjour"})
+    utilisateur.uid = "u1"
+    assert [c["id"] for c in client.get("/conversations").json()] == [cid]
+    assert client.get("/annonces/me").json()[0]["nb_interesses"] == 1
+
+
+def test_conversation_vide_purgee_apres_24h(client, utilisateur, db):
+    a, vide = conversation(client, utilisateur)
+    utilisateur.uid = "u3"
+    ecrite = client.post("/conversations", json={"annonce_id": a["id"]}).json()["id"]
+    client.post(f"/conversations/{ecrite}/messages", json={"contenu": "Bonjour"})
+    hier = datetime.now(timezone.utc) - timedelta(hours=25)
+    db.query(models.Conversation).update({models.Conversation.created_at: hier})
+    db.commit()
+    taches.purger_conversations()
+    restantes = {c.id for c in db.query(models.Conversation).all()}
+    assert restantes == {ecrite}
+
+
+def test_prises_de_contact_limitees(client, utilisateur):
+    utilisateur.uid = "u1"
+    ids = [publier(client, titre=f"Objet {i}")["id"] for i in range(10)]
+    utilisateur.uid = "u2"
+    for aid in ids:
+        assert client.post("/conversations", json={"annonce_id": aid}).status_code == 200
+    # Revenir sur une conversation existante n'est jamais limité
+    assert client.post("/conversations", json={"annonce_id": ids[0]}).status_code == 200
+    for _ in range(messagerie.MAX_NOUVELLES_CONVERSATIONS_PAR_HEURE - 10):
+        outils.limite_atteinte("u2", "conversation", messagerie.MAX_NOUVELLES_CONVERSATIONS_PAR_HEURE, 3600)
+    utilisateur.uid = "u4"
+    autre = publier(client, titre="Encore un")["id"]
+    utilisateur.uid = "u2"
+    assert client.post("/conversations", json={"annonce_id": autre}).status_code == 429
+
+
+def test_conversation_traitee_plus_lisible_par_l_equipe(client, utilisateur, db):
+    a, cid = conversation(client, utilisateur)
+    client.post(f"/conversations/{cid}/signaler", json={"raison": "Propos déplacés"})
+    db.add(models.Role(clerk_user_id="modo", role="moderateur"))
+    db.commit()
+    utilisateur.uid = "modo"
+    assert client.get(f"/admin/conversations/{cid}").status_code == 200
+    sid = client.get("/admin/signalements").json()[0]["id"]
+    client.patch(f"/admin/signalements/{sid}/traiter")
+    assert client.get(f"/admin/conversations/{cid}").status_code == 404

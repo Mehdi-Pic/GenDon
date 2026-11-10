@@ -1,4 +1,5 @@
 # API Gen Don (déploiement Railway)
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -7,6 +8,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
+
+# Les erreurs (emails, purges, Clerk, Cloudinary) apparaissent dans les journaux Railway
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s : %(message)s",
+)
 
 from .migrations import migrer  # noqa: E402
 from .photos import router as router_photos  # noqa: E402

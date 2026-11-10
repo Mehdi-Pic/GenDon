@@ -26,8 +26,17 @@ function MessagesLink() {
       } catch {}
     }
     charger()
-    const intervalle = setInterval(charger, 20000)
-    return () => { actif = false; clearInterval(intervalle) }
+    // Onglet masqué : pas de requête ; on rafraîchit dès qu'il redevient visible
+    const intervalle = setInterval(() => {
+      if (document.visibilityState === "visible") charger()
+    }, 20000)
+    const auRetour = () => { if (document.visibilityState === "visible") charger() }
+    document.addEventListener("visibilitychange", auRetour)
+    return () => {
+      actif = false
+      clearInterval(intervalle)
+      document.removeEventListener("visibilitychange", auRetour)
+    }
   }, [isSignedIn, getToken, pathname])
 
   return (

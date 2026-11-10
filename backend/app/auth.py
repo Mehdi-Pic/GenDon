@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 from typing import Optional
@@ -5,6 +6,8 @@ import httpx
 import jwt
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+log = logging.getLogger(__name__)
 
 security = HTTPBearer()
 security_optionnelle = HTTPBearer(auto_error=False)
@@ -24,10 +27,22 @@ def _charger_jwks(force: bool = False) -> dict:
         if not url:
             raise HTTPException(status_code=500, detail="CLERK_JWKS_URL non configurée")
         try:
-            _jwks = httpx.get(url, timeout=5).json()
-            _jwks_charge_a = time.monotonic()
+            reponse = httpx.get(url, timeout=5)
+            reponse.raise_for_status()
+            cles = reponse.json()
+            if not isinstance(cles, dict) or not isinstance(cles.get("keys"), list):
+                raise ValueError("réponse sans clés")
         except Exception:
-            raise HTTPException(status_code=500, detail="Impossible de récupérer les clés Clerk")
+            log.exception("Chargement des clés Clerk (JWKS) impossible")
+            if _jwks is not None:
+                # Rechargement forcé raté : on garde les clés connues, et le délai repart
+                # pour qu'une série de tokens inconnus ne martèle pas Clerk
+                _jwks_charge_a = time.monotonic()
+                return _jwks
+            # Rien n'est mis en cache : une erreur passagère de Clerk ne bloque pas les connexions
+            # jusqu'au prochain redémarrage, la requête suivante réessaiera
+            raise HTTPException(status_code=503, detail="Connexion momentanément indisponible")
+        _jwks, _jwks_charge_a = cles, time.monotonic()
     return _jwks
 
 

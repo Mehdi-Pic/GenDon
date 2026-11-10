@@ -186,14 +186,17 @@ def admin_lire_conversation(
     db: Session = Depends(get_db),
     acteur: dict = Depends(exiger_moderateur),
 ):
-    """Lecture d'une conversation par l'équipe : uniquement si elle a été signalée par l'un
-    des participants (jamais de consultation libre des messages), et chaque lecture est journalisée."""
+    """Lecture d'une conversation par l'équipe : uniquement tant qu'un signalement de l'un des
+    participants est en attente (jamais de consultation libre des messages, ni après traitement),
+    et chaque lecture est journalisée."""
     conv = db.query(models.Conversation).filter(models.Conversation.id == conversation_id).first()
     signalee = (
-        db.query(models.Signalement.id).filter(models.Signalement.conversation_id == conversation_id).first()
+        db.query(models.Signalement.id)
+        .filter(models.Signalement.conversation_id == conversation_id, models.Signalement.traite == False)  # noqa: E712
+        .first()
     )
     if not conv or not signalee:
-        raise HTTPException(status_code=404, detail="Conversation introuvable ou non signalée")
+        raise HTTPException(status_code=404, detail="Conversation introuvable ou signalement déjà traité")
     messages = (
         db.query(models.Message)
         .filter(models.Message.conversation_id == conversation_id)

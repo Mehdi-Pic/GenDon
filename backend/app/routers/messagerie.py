@@ -3,14 +3,14 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel as PydanticBase, Field
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import clerk, emails, models
 from ..auth import get_current_user_id
 from ..database import get_db
-from ..outils import auteur_non_suspendu, verifier_rate_limit
+from ..outils import auteur_non_suspendu, limite_atteinte, verifier_rate_limit
 
 router = APIRouter()
 
@@ -81,6 +81,22 @@ def liberer_reservation(db: Session, annonce: models.Annonce, texte_reserve: str
     )
 
 
+def conversation_entamee():
+    """Condition SQL : le demandeur ou le donneur a écrit au moins un message (hors messages système).
+    Un simple clic sur « Contacter » ouvre une conversation vide, qui ne compte pas encore
+    comme une personne intéressée."""
+    return (
+        select(models.Message.id)
+        .where(models.Message.conversation_id == models.Conversation.id, models.Message.systeme == False)  # noqa: E712
+        .exists()
+    )
+
+
+# Ouvertures de conversation par heure et par compte : une conversation vide est visible
+# du demandeur seulement, mais chacune coûte une ligne en base
+MAX_NOUVELLES_CONVERSATIONS_PAR_HEURE = 30
+
+
 def _signalement_en_attente(db: Session, conversation_id: int) -> bool:
     return (
         db.query(models.Signalement.id)
@@ -96,6 +112,19 @@ class ConversationCreate(PydanticBase):
 
 class MessageCreate(PydanticBase):
     contenu: str = Field(min_length=1, max_length=2000)
+
+
+def _reprendre_conversation(db: Session, conv: models.Conversation) -> int:
+    """Le demandeur recontacte un donneur : une seule conversation par annonce et par demandeur,
+    donc s'il l'avait quittée, il y revient (sinon le lien mènerait à une conversation introuvable)."""
+    if conv.demandeur_actif:
+        return conv.id
+    if not conv.donneur_actif:
+        raise HTTPException(status_code=400, detail="Le donneur a quitté cette conversation")
+    conv.demandeur_actif = True
+    message_systeme(db, conv, f"{conv.demandeur_pseudo} est revenu dans la conversation")
+    db.commit()
+    return conv.id
 
 
 @router.post("/conversations")
@@ -122,8 +151,10 @@ def demarrer_conversation(
         .first()
     )
     if existante:
-        return {"id": existante.id}
+        return {"id": _reprendre_conversation(db, existante)}
 
+    if limite_atteinte(user_id, "conversation", MAX_NOUVELLES_CONVERSATIONS_PAR_HEURE, 3600):
+        raise HTTPException(status_code=429, detail="Trop de prises de contact en peu de temps, réessayez plus tard")
     demandeur_pseudo = clerk.pseudo_clerk(user_id)
     conv = models.Conversation(
         annonce_id=data.annonce_id,
@@ -146,7 +177,7 @@ def demarrer_conversation(
         )
         if not existante:
             raise HTTPException(status_code=409, detail="Réessayez")
-        return {"id": existante.id}
+        return {"id": _reprendre_conversation(db, existante)}
     db.refresh(conv)
     return {"id": conv.id}
 
@@ -159,7 +190,9 @@ def mes_conversations(
     convs = (
         db.query(models.Conversation)
         .filter(
-            ((models.Conversation.donneur_id == user_id) & (models.Conversation.donneur_actif == True))
+            # Côté donneur, une conversation n'apparaît qu'une fois le premier message écrit
+            ((models.Conversation.donneur_id == user_id) & (models.Conversation.donneur_actif == True)
+             & conversation_entamee())
             | ((models.Conversation.demandeur_id == user_id) & (models.Conversation.demandeur_actif == True))
         )
         .order_by(models.Conversation.dernier_message_at.desc())

@@ -2,6 +2,7 @@
 import hashlib
 import hmac
 import os
+import time
 from html import escape
 
 import resend
@@ -51,6 +52,53 @@ def gabarit(titre: str, corps: str, pied: str = "") -> str:
 def envoyer(destinataire: str, sujet: str, html: str, **options) -> None:
     resend.api_key = os.getenv("RESEND_API_KEY")
     resend.Emails.send({"from": expediteur(), "to": [destinataire], "subject": sujet, "html": html, **options})
+
+
+def envoyer_en_masse(envois: list, prefixe_idempotence: str) -> None:
+    """Envoi par lots de 100 (API batch Resend) avec une pause entre les lots : un appel par
+    destinataire dépassait la limite de débit et des emails étaient perdus. La clé d'idempotence
+    (valable 24 h chez Resend) évite un double envoi si l'opération est relancée."""
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    for i in range(0, len(envois), 100):
+        lot = envois[i:i + 100]
+        for tentative in range(3):
+            try:
+                resend.Batch.send(
+                    lot,
+                    {"idempotency_key": f"{prefixe_idempotence}-{i}", "batch_validation": "permissive"},
+                )
+                break
+            except Exception:
+                time.sleep(2 * (tentative + 1))
+        time.sleep(1)
+
+
+def paragraphes(texte: str) -> str:
+    """Texte saisi par l'équipe -> HTML : une ligne vide sépare deux paragraphes,
+    un simple retour à la ligne est conservé."""
+    blocs = [b.strip() for b in texte.replace("\r\n", "\n").split("\n\n") if b.strip()]
+    return "".join(
+        f'<p style="margin:0 0 14px;line-height:1.55">{escape(b).replace(chr(10), "<br/>")}</p>' for b in blocs
+    )
+
+
+def email_information(titre: str, message: str, bouton_don: bool, lien_desabo: str) -> str:
+    """Email ponctuel de l'équipe à tous les inscrits (appel aux dons, nouveauté...)."""
+    frontend = frontend_url()
+    appel = (
+        f'<p style="margin:24px 0 8px;text-align:center">{bouton(f"{frontend}/annonces/new", "Déposer un don")}</p>'
+        '<p style="margin:0;text-align:center;color:#6b7280;font-size:13px">Gratuit, en 2 minutes</p>'
+        if bouton_don else ""
+    )
+    corps = f"""
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+             style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:8px">
+        <tr><td style="padding:18px 20px;color:#111;font-size:15px">{paragraphes(message)}</td></tr>
+      </table>
+      {appel}
+    """
+    pied = f'<a href="{lien_desabo}" style="color:#9ca3af">Ne plus recevoir les emails d&#39;information de GenDon</a>'
+    return gabarit(escape(titre), corps, pied)
 
 
 def vignette_email(url: str, largeur: int = 320) -> str:

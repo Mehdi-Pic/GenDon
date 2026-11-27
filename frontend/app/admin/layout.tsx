@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useAuth } from "@clerk/nextjs"
 import { notFound, usePathname } from "next/navigation"
 import Link from "next/link"
-import { LayoutDashboard, ClipboardList, Users, Flag, ScrollText, ShieldCheck } from "lucide-react"
+import { LayoutDashboard, ClipboardList, Users, Flag, ScrollText, ShieldCheck, Mail } from "lucide-react"
 import { AdminContext } from "./adminContext"
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -58,7 +58,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin/annonces", label: "Annonces", Icon: ClipboardList },
     { href: "/admin/utilisateurs", label: "Utilisateurs", Icon: Users },
     { href: "/admin/signalements", label: "Signalements", Icon: Flag },
-    ...(role === "admin" ? [{ href: "/admin/journal", label: "Journal", Icon: ScrollText }] : []),
+    ...(role === "admin"
+      ? [
+          { href: "/admin/emails", label: "Email aux inscrits", Icon: Mail },
+          { href: "/admin/journal", label: "Journal", Icon: ScrollText },
+        ]
+      : []),
   ]
 
   return (

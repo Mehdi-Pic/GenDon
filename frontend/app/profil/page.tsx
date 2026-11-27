@@ -577,7 +577,7 @@ export default function Profil() {
                 <Mail className="w-5 h-5 text-green-600 mt-0.5 shrink-0" aria-hidden="true" />
                 <span>
                   <span className="block text-sm font-semibold text-gray-900">Lettre d&apos;information</span>
-                  <span className="block text-sm text-gray-500">Recevoir chaque jeudi les derniers dons publiés à Gennevilliers.</span>
+                  <span className="block text-sm text-gray-500">Recevoir chaque jeudi les derniers dons publiés à Gennevilliers, et de temps en temps des nouvelles de GenDon.</span>
                 </span>
               </span>
               <input

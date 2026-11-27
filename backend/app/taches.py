@@ -1,6 +1,5 @@
 """Tâches planifiées : purges, rappels d'expiration, newsletter, alertes de recherche."""
 import os
-import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from html import escape
@@ -255,22 +254,8 @@ def envoyer_newsletter_hebdo():
                 """,
             })
 
-        # Envoi par lots de 100 (API batch Resend) avec une pause entre les lots :
-        # un appel par destinataire dépassait la limite de débit et des emails étaient perdus.
-        # La clé d'idempotence évite un double envoi si la tâche est relancée le même jour.
         jour = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        for i in range(0, len(envois), 100):
-            lot = envois[i:i + 100]
-            for tentative in range(3):
-                try:
-                    resend.Batch.send(
-                        lot,
-                        {"idempotency_key": f"newsletter-{jour}-{i}", "batch_validation": "permissive"},
-                    )
-                    break
-                except Exception:
-                    time.sleep(2 * (tentative + 1))
-            time.sleep(1)
+        emails.envoyer_en_masse(envois, f"newsletter-{jour}")
     except Exception:
         pass
     finally:

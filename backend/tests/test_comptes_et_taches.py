@@ -185,3 +185,47 @@ def test_journal_purge_apres_un_an(db):
     taches.purger_journal_moderation()
     db.expire_all()
     assert [a.action for a in db.query(models.ActionModeration).all()] == ["recent"]
+
+
+# ---------- Email d'information à tous les inscrits ----------
+
+EMAIL_INFO = {"sujet": "GenDon a besoin de vous", "titre": "Un don pour GenDon",
+              "message": "Bonjour,\n\nDéposez un <don> !\nMerci", "bouton_don": True}
+
+
+def _compte(uid, email, **champs):
+    return {"id": uid, "primary_email_address_id": "e",
+            "email_addresses": [{"id": "e", "email_address": email}], **champs}
+
+
+def test_email_information_reserve_aux_admins(client, db):
+    assert client.post("/admin/emails/envoi", json=EMAIL_INFO).status_code == 403
+    db.add(models.Role(clerk_user_id="u1", role="moderateur"))
+    db.commit()
+    assert client.post("/admin/emails/envoi", json=EMAIL_INFO).status_code == 403
+
+
+def test_email_information_a_tous_les_inscrits(client, services, monkeypatch, db):
+    monkeypatch.setenv("ADMIN_USER_ID", "u1")
+    comptes = [_compte("a", "a@x.fr"), _compte("b", "b@x.fr"), _compte("c", "c@x.fr", banned=True)]
+    monkeypatch.setattr(clerk, "tous_les_utilisateurs", lambda: comptes)
+    client.post("/newsletter/desabonnement", json={"token": emails.token_desabonnement("b")})
+
+    apercu = client.post("/admin/emails/apercu", json=EMAIL_INFO).json()
+    assert apercu["destinataires"] == 1
+    assert "Déposez un &lt;don&gt; !<br/>Merci" in apercu["html"]  # texte échappé, retours à la ligne gardés
+    assert "/annonces/new" in apercu["html"]
+
+    assert client.post("/admin/emails/envoi", json=EMAIL_INFO).json() == {"destinataires": 1}
+    (lot, options), = services.lots_newsletter
+    assert [e["to"][0] for e in lot] == ["a@x.fr"]  # ni le désabonné, ni le compte suspendu
+    assert "List-Unsubscribe" in lot[0]["headers"]
+    assert options["idempotency_key"].startswith("information-")
+    assert db.query(models.ActionModeration).filter_by(action="email_information").count() == 1
+
+
+def test_email_information_sans_bouton(client, monkeypatch):
+    monkeypatch.setenv("ADMIN_USER_ID", "u1")
+    monkeypatch.setattr(clerk, "tous_les_utilisateurs", lambda: [])
+    html = client.post("/admin/emails/apercu", json={**EMAIL_INFO, "bouton_don": False}).json()["html"]
+    assert "/annonces/new" not in html

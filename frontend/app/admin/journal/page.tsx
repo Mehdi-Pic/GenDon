@@ -18,6 +18,7 @@ const LIBELLES: Record<string, string> = {
   conversation_consultee: "Lecture d'une conversation signalée",
   suspension: "Suspension de compte",
   reactivation: "Réactivation de compte",
+  email_information: "Email envoyé aux inscrits",
 }
 
 export default function AdminJournal() {

@@ -1,13 +1,14 @@
-"""Panel d'administration : statistiques, annonces, utilisateurs, signalements, journal."""
+"""Panel d'administration : statistiques, annonces, utilisateurs, signalements, journal, emails."""
+import hashlib
 from datetime import datetime, timedelta, timezone
 from math import ceil
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel as PydanticBase, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from .. import clerk, models, roles, schemas
+from .. import clerk, emails, models, roles, schemas
 from ..database import get_db
 from ..outils import auteur_non_suspendu, enregistrer_suspension, filtre_recherche
 from ..photos import supprimer_images_cloudinary
@@ -287,3 +288,89 @@ def admin_suspendre_utilisateur(
     pseudo = clerk.pseudo_clerk(uid)
     journaliser(db, acteur["user_id"], "suspension" if data.suspendu else "reactivation", f"{pseudo} ({uid})")
     return {"suspendu": data.suspendu}
+
+
+# ---------- Email d'information à tous les inscrits (admins uniquement) ----------
+
+class EmailInformation(PydanticBase):
+    sujet: str = Field(min_length=3, max_length=150)
+    titre: str = Field(min_length=3, max_length=120)
+    message: str = Field(min_length=10, max_length=5000)
+    bouton_don: bool = True
+
+
+def _destinataires_information(db: Session) -> list:
+    """(user_id, email) des inscrits, sauf ceux qui ont refusé les emails d'information."""
+    desabonnes = {d.clerk_user_id for d in db.query(models.DesabonnementNewsletter).all()}
+    destinataires = []
+    for u in clerk.tous_les_utilisateurs():
+        uid, email = u.get("id"), clerk.email_principal(u)
+        if uid and email and uid not in desabonnes and not u.get("banned"):
+            destinataires.append((uid, email))
+    return destinataires
+
+
+def _email_information(data: EmailInformation, uid: str, email: str) -> dict:
+    lien_desabo = f"{emails.frontend_url()}/desabonnement?token={emails.token_desabonnement(uid)}"
+    return {
+        "from": emails.expediteur(),
+        "to": [email],
+        "subject": data.sujet,
+        "headers": {"List-Unsubscribe": f"<{lien_desabo}>"},
+        "html": emails.email_information(data.titre, data.message, data.bouton_don, lien_desabo),
+    }
+
+
+def _exiger_cle_desabonnement():
+    if not emails.cle_desabonnement():
+        raise HTTPException(status_code=503, detail="NEWSLETTER_SECRET manquant : liens de désabonnement impossibles")
+
+
+@router.post("/admin/emails/apercu")
+def admin_apercu_email(
+    data: EmailInformation,
+    db: Session = Depends(get_db),
+    acteur: dict = Depends(exiger_admin),
+):
+    _exiger_cle_desabonnement()
+    lien = f"{emails.frontend_url()}/desabonnement?token={emails.token_desabonnement(acteur['user_id'])}"
+    return {
+        "html": emails.email_information(data.titre, data.message, data.bouton_don, lien),
+        "destinataires": len(_destinataires_information(db)),
+    }
+
+
+@router.post("/admin/emails/test")
+def admin_tester_email(data: EmailInformation, acteur: dict = Depends(exiger_admin)):
+    """Envoie l'email à l'administrateur seul, pour le relire dans une vraie boîte mail."""
+    _exiger_cle_desabonnement()
+    email = clerk.email_utilisateur(acteur["user_id"])
+    if not email:
+        raise HTTPException(status_code=502, detail="Adresse email introuvable pour votre compte")
+    contenu = _email_information(data, acteur["user_id"], email)
+    try:
+        emails.envoyer(email, f"[TEST] {data.sujet}", contenu["html"], headers=contenu["headers"])
+    except Exception:
+        raise HTTPException(status_code=502, detail="L'envoi a échoué (Resend)")
+    return {"envoye_a": email}
+
+
+@router.post("/admin/emails/envoi")
+def admin_envoyer_email(
+    data: EmailInformation,
+    taches_fond: BackgroundTasks,
+    db: Session = Depends(get_db),
+    acteur: dict = Depends(exiger_admin),
+):
+    """Envoie l'email à tous les inscrits. Le même email (sujet + message) ne part qu'une fois
+    par jour même en cas de double clic : clé d'idempotence Resend."""
+    _exiger_cle_desabonnement()
+    destinataires = _destinataires_information(db)
+    if not destinataires:
+        raise HTTPException(status_code=502, detail="Aucun destinataire (Clerk injoignable ?)")
+    empreinte = hashlib.sha256(f"{data.sujet}\n{data.titre}\n{data.message}".encode()).hexdigest()[:16]
+    jour = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    envois = [_email_information(data, uid, email) for uid, email in destinataires]
+    taches_fond.add_task(emails.envoyer_en_masse, envois, f"information-{jour}-{empreinte}")
+    journaliser(db, acteur["user_id"], "email_information", f"« {data.sujet} » → {len(envois)} destinataires")
+    return {"destinataires": len(envois)}
